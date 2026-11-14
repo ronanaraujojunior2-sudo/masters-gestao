@@ -83,7 +83,7 @@ main{padding:0 12px 40px}h1{font-size:21px}.top .who{display:none}
  </form>
 </div>
 
-<aside id="side" class="hide"><img class="lg" src="assets/logo.png" alt="Masters Engenharia"><div id="menu"></div><div class="soon" style="margin-top:14px">Versão 3B-5b</div></aside>
+<aside id="side" class="hide"><img class="lg" src="assets/logo.png" alt="Masters Engenharia"><div id="menu"></div></aside>
 <div class="scrim" id="scrim"></div>
 <main id="app" class="hide">
  <div class="top">
@@ -219,4 +219,71 @@ async function painel(){cur='painel';mark();const v=$('#view');
  v.innerHTML=`<h1>Painel</h1><p class="sub">Bem-vindo(a), ${esc(me.nome||'')}. Os números abaixo vêm do banco de dados.</p>
  <div class="kpis">${T.map((t,i)=>`<div class="card kpi"><b>${n[i].count==null?'—':n[i].count}</b>${t[1]}</div>`).join('')}</div>
  <div class="card"><h3 style="margin-top:0">Por onde começar</h3><ol class="steps">
- <li>Cadastre as <button class="link"
+ <li>Cadastre as <button class="link" data-g="obras">obras</button> (somente o administrador).</li>
+ <li>Cadastre as <button class="link" data-g="disciplinas">disciplinas</button> e as <button class="link" data-g="categorias">categorias</button>.</li>
+ <li>Cadastre os <button class="link" data-g="funcionarios">funcionários</button>.</li>
+ <li>Cadastre as <button class="link" data-g="ferramentas">ferramentas</button> e os <button class="link" data-g="materiais">materiais</button>.</li></ol></div>`;
+ v.querySelectorAll('[data-g]').forEach(b=>b.onclick=()=>show(b.dataset.g))}
+function mark(){document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('on',n.dataset.v===cur));document.body.classList.remove('open')}
+function menu(){const g=(t,l)=>`<h4>${t}</h4>`+l.map(k=>`<button class="nav" data-v="${k}">${E[k].p}</button>`).join('');
+ $('#menu').innerHTML=`<button class="nav" data-v="painel">Painel</button>`+g('Cadastros',['obras','funcionarios','ferramentas','materiais','fornecedores','disciplinas','categorias'])+
+ `<h4>Em breve</h4><div class="soon">Malões e malas</div><div class="soon">Solicitações e pedidos</div><div class="soon">Usuários</div>`;
+ document.querySelectorAll('.nav').forEach(n=>n.onclick=()=>n.dataset.v==='painel'?painel():show(n.dataset.v))}
+
+/* ===== entrada e saída ===== */
+function tela(l){$('#login').classList.toggle('hide',l!=='login');$('#side').classList.toggle('hide',l!=='app');$('#app').classList.toggle('hide',l!=='app')}
+async function entrar(){const{data:{session}}=await sb.auth.getSession();if(!session){tela('login');return}
+ const{data,error}=await sb.from('perfis').select('*').eq('id',session.user.id).maybeSingle();
+ if(error||!data||!data.ativo){await sb.auth.signOut();tela('login');const e=$('#le');e.textContent=error?msg(error):'Seu acesso ainda não foi liberado pelo administrador.';e.classList.remove('hide');return}
+ me=data;cache={};$('#who').innerHTML=esc(me.nome||me.login)+'<br>'+esc(me.perfil);menu();tela('app');painel()}
+const EYE='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/><line class="sl" x1="3" y1="21" x2="21" y2="3"/></svg>';
+const EYEB='<button type="button" class="eye" aria-label="Mostrar senha" title="Mostrar ou ocultar a senha">'+EYE+'</button>';
+const pwf=(id,l)=>`<label class="fl" for="${id}">${l} <b class="rq">*</b></label><div class="pw"><input id="${id}" type="password" autocomplete="new-password">${EYEB}</div>`;
+function esqueci(){modal('Esqueci minha senha','<p>Por segurança, a nova senha é definida pelo administrador do sistema (MASTERS).</p><ol class="steps"><li>Avise o administrador que você esqueceu a senha.</li><li>Ele define uma senha provisória para você.</li><li>Entre com ela e clique em “Minha senha” para escolher a sua.</li></ol>')}
+function trocarSenha(){modal('Alterar minha senha',pwf('n1','Nova senha')+pwf('n2','Repita a nova senha')+'<div class="hint">Use pelo menos 6 caracteres.</div>','Salvar nova senha',async()=>{
+ const a=$('#n1').value,b=$('#n2').value;if(a.length<6)return 'A senha precisa ter pelo menos 6 caracteres.';if(a!==b)return 'As duas senhas não são iguais.';
+ const{error}=await sb.auth.updateUser({password:a});if(error)return msg(error);toast('Senha alterada.')})}
+document.addEventListener('click',e=>{const b=e.target.closest('.eye');if(!b)return;const i=b.parentNode.querySelector('input'),v=i.type==='password';i.type=v?'text':'password';b.classList.toggle('on',v);b.setAttribute('aria-label',v?'Ocultar senha':'Mostrar senha')});
+window.onload=()=>{
+ $('#pwbox').insertAdjacentHTML('beforeend',EYEB);$('#fg').onclick=esqueci;$('#mp').onclick=trocarSenha;
+ if(typeof supabase==='undefined'){tela('login');const e=$('#le');e.textContent='Não foi possível carregar o sistema. Verifique a internet e atualize a página.';e.classList.remove('hide');return}
+ sb=supabase.createClient(SB_URL,SB_KEY);
+ try{const s=localStorage.getItem('mt');if(s)R.setAttribute('data-theme',s)}catch(x){}
+ $('#th').onclick=()=>{const d=R.getAttribute('data-theme')==='dark'||(!R.getAttribute('data-theme')&&matchMedia('(prefers-color-scheme:dark)').matches),n=d?'light':'dark';R.setAttribute('data-theme',n);try{localStorage.setItem('mt',n)}catch(x){}};
+ $('#mb').onclick=()=>document.body.classList.toggle('open');$('#scrim').onclick=()=>document.body.classList.remove('open');
+ $('#out').onclick=async()=>{await sb.auth.signOut();me=null;tela('login')};
+ $('#lf').onsubmit=async ev=>{ev.preventDefault();const b=$('#lb'),e=$('#le');b.disabled=true;e.classList.add('hide');
+let u=$('#em').value.trim().toLowerCase().replace(/\s+/g,'');
+if(u === 'masters') {
+  u = 'ronanaraujunior@gmail.com';
+} else if(u.indexOf('@') < 0) {
+  u += '@masters.local';
+}
+  const{error}=await sb.auth.signInWithPassword({email:u,password:$('#pw').value});b.disabled=false;
+  if(error){e.textContent=/invalid/i.test(error.message)?'Usuário ou senha incorretos.':msg(error);e.classList.remove('hide');return}
+  $('#pw').value='';entrar()};
+ entrar()};
+</script>
+ <script src="modulo-malas.js"></script>
+ <script src="modulo-compras.js"></script>
+ <script src="modulo-importar.js"></script>
+ <script src="modulo-materiais.js"></script>
+ <script src="modulo-importar-solic.js"></script>
+ <script>
+/* 3B-5c: botão "Importar solicitações" também dentro da tela Solicitações e pedidos */
+(function(){
+ function poe(){
+  const v=document.getElementById('view'),h=v&&v.querySelector('h1');
+  if(!h||h.textContent.trim()!=='Solicitações e pedidos'||!me||me.perfil==='FUNCIONARIO')return;
+  const bar=v.querySelector('.bar');if(!bar||bar.querySelector('#imp_sol_btn'))return;
+  const b=document.createElement('button');b.id='imp_sol_btn';b.type='button';b.className='sec';b.textContent='Importar solicitações (Sienge)';
+  b.onclick=()=>{const m=document.querySelector('#menu [data-v="imp_solic"]');if(!m){toast('Botão de importação não encontrado no menu.');return}
+   m.click();const f=document.getElementById('sx_f');if(f)f.click()};
+  bar.appendChild(b)}
+ new MutationObserver(poe).observe(document.getElementById('view'),{childList:true,subtree:true});
+ poe();
+ document.querySelectorAll('aside .soon').forEach(x=>{if(x.textContent==='Versão 3B-5b')x.textContent='Versão 3B-5c'});
+})();
+</script>
+</body>
+</html>
