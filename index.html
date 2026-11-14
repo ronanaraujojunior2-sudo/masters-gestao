@@ -2,196 +2,247 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Masters Engenharia – Sistema de gestão</title>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Masters Gestão</title>
 <style>
-:root{--blue:#313E86;--red:#FC0A0B;--bg:#EEF1F8;--surf:#fff;--ink:#1B2252;--mute:#5E678F;--line:#D9DEEE;--soft:#E3E8F6;--side:#313E86;--sideink:#fff;--b2:#6D7BC4;--b3:#AEB7E3;--chip:#E3E8F6;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0F1330;--surf:#181E47;--ink:#E8EBFA;--mute:#98A2D6;--line:#2A3266;--soft:#222A5C;--side:#0B0E27;--blue:#7E8CE0;--b2:#5967B8;--b3:#3A4686;--chip:#2A3266;color-scheme:dark}}
-:root[data-theme="dark"]{--bg:#0F1330;--surf:#181E47;--ink:#E8EBFA;--mute:#98A2D6;--line:#2A3266;--soft:#222A5C;--side:#0B0E27;--blue:#7E8CE0;--b2:#5967B8;--b3:#3A4686;--chip:#2A3266;color-scheme:dark}
-html{scroll-padding-top:env(safe-area-inset-top,0px)}
+:root{--blue:#313E86;--red:#FC0A0B;--bg:#EEF1F8;--surf:#fff;--ink:#1B2252;--mute:#5E678F;--line:#C9D0E8;--soft:#E3E8F6;--side:#313E86;--chip:#E3E8F6;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0F1330;--surf:#181E47;--ink:#E8EBFA;--mute:#98A2D6;--line:#2A3266;--soft:#222A5C;--side:#0B0E27;--blue:#7E8CE0;--chip:#2A3266;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0F1330;--surf:#181E47;--ink:#E8EBFA;--mute:#98A2D6;--line:#2A3266;--soft:#222A5C;--side:#0B0E27;--blue:#7E8CE0;--chip:#2A3266;color-scheme:dark}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Manrope,system-ui,Arial,sans-serif;display:flex;min-height:100vh}
-button{font:inherit;color:inherit;cursor:pointer}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,"Segoe UI",Arial,sans-serif;display:flex;min-height:100vh}
+button,input,select,textarea{font:inherit;color:inherit}
 :focus-visible{outline:3px solid var(--red);outline-offset:2px}
-aside{width:260px;background:var(--side);color:var(--sideink);display:flex;flex-direction:column;transition:width .2s;position:sticky;top:0;height:100vh;overflow-y:auto;flex:none;z-index:20}
-.brand{display:flex;align-items:center;gap:10px;padding:18px 16px;font-weight:800;font-size:18px}
-.logo{width:38px;height:38px;border-radius:8px;background:#fff;color:#313E86;display:grid;place-items:center;font-weight:800;flex:none;border-bottom:4px solid var(--red)}
-.lg{background:#fff;border-radius:8px;padding:4px 6px;height:46px;width:228px;object-fit:contain}
-body.mini .lg{width:44px;padding:4px;object-fit:cover;object-position:left center}
-aside h4{margin:14px 18px 4px;font-size:12px;font-weight:600;color:#AEB7E3}
-.nav{display:flex;align-items:center;gap:12px;width:100%;padding:10px 18px;background:none;border:0;border-left:4px solid transparent;color:#E6E9F8;text-align:left}
+aside{width:250px;background:var(--side);color:#fff;flex:none;position:sticky;top:0;height:100vh;overflow-y:auto;z-index:20}
+.lg{display:block;background:#fff;border-radius:8px;padding:4px 6px;height:46px;width:226px;object-fit:contain;margin:16px 12px}
+aside h4{margin:14px 18px 4px;font-size:13px;font-weight:600;color:#AEB7E3}
+.nav{display:block;width:100%;padding:11px 18px;background:none;border:0;border-left:4px solid transparent;color:#E6E9F8;text-align:left;cursor:pointer}
 .nav:hover{background:rgba(255,255,255,.08)}
 .nav.on{background:rgba(255,255,255,.14);border-left-color:var(--red);color:#fff;font-weight:600}
-.nav i{font-style:normal;width:22px;text-align:center;flex:none}
-.nav em{margin-left:auto;background:var(--red);color:#fff;font-style:normal;font-size:12px;border-radius:10px;padding:0 7px}
-body.mini aside{width:68px}
-body.mini aside h4,body.mini .nav span,body.mini .nav em,body.mini .bn{display:none}
-main{flex:1;min-width:0;padding:0 24px 40px}
-.top{position:sticky;top:0;background:var(--bg);display:flex;gap:10px;align-items:center;padding:14px 0;z-index:10}
-.ico{background:var(--surf);border:1px solid var(--line);border-radius:10px;width:42px;height:42px;flex:none}
-.search{flex:1;min-width:0;background:var(--surf);border:1px solid var(--line);border-radius:10px;height:42px;padding:0 14px;color:var(--ink);font:inherit}
-.who{font-size:13px;color:var(--mute);text-align:right;line-height:1.2}
-h1{font-size:24px;margin:6px 0 2px;font-weight:800}
-.sub{color:var(--mute);margin:0 0 16px}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
-.card{background:var(--surf);border:1px solid var(--line);border-radius:12px;padding:16px}
-.kpi{border-left:5px solid var(--blue)}
-.kpi.al{border-left-color:var(--red)}
-.kpi b{display:block;font-size:28px;font-weight:800;line-height:1.1}
-.kpi span{color:var(--mute);font-size:13px}
-.grid{display:grid;grid-template-columns:1.2fr 1fr;gap:12px;margin-top:12px}
-.card h3{margin:0 0 10px;font-size:16px}
-.flow{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px}
-.st{flex:1;min-width:104px;text-align:center;font-size:12px;border-top:5px solid var(--b3);padding-top:6px}
-.st b{display:block;font-size:20px}
-.st.done{border-color:var(--blue)}.st.warn{border-color:var(--red)}
-.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--mute);margin-top:8px}
-.legend s{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;text-decoration:none}
-.wrap{overflow-x:auto}
-table{width:100%;border-collapse:collapse;min-width:760px}
-th{text-align:left;font-size:13px;color:var(--mute);font-weight:600;padding:8px 10px;border-bottom:2px solid var(--line)}
-td{padding:10px;border-bottom:1px solid var(--line)}
-tr.r{cursor:pointer}tr.r:hover{background:var(--soft)}
-.chip{display:inline-block;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600;background:var(--chip);color:var(--ink)}
-.chip.ok{background:var(--blue);color:#fff}.chip.bad{background:var(--red);color:#fff}
-.det td{background:var(--soft)}
-.det table{min-width:0;margin-top:6px}
-.just{border-left:4px solid var(--red);padding:6px 10px;margin-top:8px;background:var(--surf);border-radius:4px;font-size:14px}
-.tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
-.tools select{background:var(--surf);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit}
-.btn{background:var(--blue);color:#fff;border:0;border-radius:8px;padding:9px 16px;font-weight:600}
+.soon{padding:8px 18px;color:#AEB7E3;font-size:14px}
+main{flex:1;min-width:0;padding:0 22px 40px}
+.top{position:sticky;top:0;background:var(--bg);display:flex;gap:10px;align-items:center;padding:12px 0;z-index:10}
+.top .who{margin-left:auto;text-align:right;font-size:13px;color:var(--mute);line-height:1.25}
+.ico,.sec{background:var(--surf);border:1px solid var(--line);border-radius:10px;min-height:44px;padding:0 14px;cursor:pointer}
+.ico{width:44px;padding:0}
+.btn{background:var(--blue);color:#fff;border:0;border-radius:10px;min-height:44px;padding:0 18px;font-weight:600;cursor:pointer}
 :root[data-theme="dark"] .btn{color:#0F1330}
-.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50;max-width:90vw}
+.btn:disabled{opacity:.6;cursor:wait}
+.mini{min-height:36px;padding:0 12px;border-radius:8px;border:1px solid var(--line);background:var(--surf);cursor:pointer;margin-right:6px}
+h1{font-size:24px;margin:6px 0 2px}
+.sub{color:var(--mute);margin:0 0 14px}
+.bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.bar input{flex:1;min-width:180px}
+input,select,textarea{width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surf)}
+.card{background:var(--surf);border:1px solid var(--line);border-radius:12px;padding:16px}
+.wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:560px}
+th{text-align:left;font-size:13px;color:var(--mute);padding:8px 10px;border-bottom:2px solid var(--line)}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle}
+.empty{padding:28px 10px;text-align:center;color:var(--mute)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px}
+.kpi{border-left:5px solid var(--blue)}.kpi b{display:block;font-size:28px}
+.steps{margin:0;padding-left:20px}.steps li{margin:8px 0}
+.link{background:none;border:0;color:var(--blue);text-decoration:underline;cursor:pointer;padding:0}
+.chip{display:inline-block;padding:2px 10px;border-radius:12px;font-size:13px;background:var(--chip)}
+.chip.red{background:var(--red);color:#fff}.chip.blue{background:var(--blue);color:#fff}
+:root[data-theme="dark"] .chip.blue{color:#0F1330}
+dialog{border:0;border-radius:14px;max-width:560px;width:calc(100% - 24px);max-height:92vh;overflow:auto;background:var(--surf);color:var(--ink);padding:20px}
+dialog::backdrop{background:rgba(10,14,40,.55)}
+dialog h2{margin:0 0 8px;font-size:20px}
+.fl{display:block;font-weight:600;margin:14px 0 4px}
+.rq{color:var(--red)}
+.hint{font-size:13px;color:var(--mute);margin-top:3px}
+.err{border-left:4px solid var(--red);background:var(--soft);padding:8px 12px;margin-top:14px;border-radius:6px}
+.acts{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
+.mv{padding:8px 0;border-bottom:1px solid var(--line)}
+#login{margin:auto;width:min(400px,92vw)}
+#login img{display:block;margin:0 auto 14px;max-width:100%}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50;max-width:90vw}
 .toast.on{opacity:1}
-.view{display:none}.view.on{display:block}
-.note{background:var(--soft);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--mute);margin-top:16px}
+.hide{display:none!important}
 @media (max-width:820px){
-aside{position:fixed;left:0;top:0;transform:translateX(-100%);transition:transform .2s;width:260px!important}
+aside{position:fixed;left:0;top:0;transform:translateX(-100%);transition:transform .2s}
 body.open aside{transform:none}
-body.mini aside h4,body.mini .nav span,body.mini .nav em{display:revert}
-main{padding:0 14px 40px}.grid{grid-template-columns:1fr}.who{display:none}h1{font-size:21px}
+main{padding:0 12px 40px}h1{font-size:21px}.top .who{display:none}
 .scrim{position:fixed;inset:0;background:rgba(10,14,40,.5);z-index:15;display:none}body.open .scrim{display:block}}
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
-<aside id="side" aria-label="Menu principal">
- <div class="brand"><img class="lg" src="assets/logo.png" alt="Masters Engenharia"></div>
- <h4>Visão geral</h4>
- <button class="nav on" data-v="painel"><i>▦</i><span>Painel gerencial</span></button>
- <h4>Compras</h4>
- <button class="nav" data-v="req"><i>☰</i><span>Requisições Sienge</span><em>7</em></button>
- <button class="nav" data-v="x"><i>⇩</i><span>Importar dados do Sienge</span></button>
- <button class="nav" data-v="x"><i>▤</i><span>Almoxarifado e recebimento</span><em>3</em></button>
- <h4>Ferramentas</h4>
- <button class="nav" data-v="x"><i>⚒</i><span>Ferramentas</span></button>
- <button class="nav" data-v="x"><i>▣</i><span>Malões e malas individuais</span></button>
- <button class="nav" data-v="x"><i>⌕</i><span>Consulta por profissional</span></button>
- <h4>Gestão</h4>
- <button class="nav" data-v="x"><i>⇄</i><span>Transferências e inventário</span></button>
- <button class="nav" data-v="x"><i>☺</i><span>Funcionários e usuários</span></button>
- <button class="nav" data-v="x"><i>▥</i><span>Relatórios e auditoria</span></button>
- <button class="nav" data-v="x"><i>⚙</i><span>Configurações e feriados</span></button>
-</aside>
+<div id="login" class="card hide">
+ <img src="assets/logo.png" alt="Masters Engenharia" height="70">
+ <h1 style="text-align:center">Entrar no Masters Gestão</h1>
+ <form id="lf">
+  <label class="fl" for="em">E-mail ou login <b class="rq">*</b></label><input id="em" type="email" autocomplete="username" required>
+  <label class="fl" for="pw">Senha <b class="rq">*</b></label><input id="pw" type="password" autocomplete="current-password" required>
+  <div class="err hide" id="le"></div>
+  <div class="acts"><button class="btn" id="lb" style="width:100%">Entrar</button></div>
+ </form>
+</div>
+
+<aside id="side" class="hide"><img class="lg" src="assets/logo.png" alt="Masters Engenharia"><div id="menu"></div></aside>
 <div class="scrim" id="scrim"></div>
-<main>
+<main id="app" class="hide">
  <div class="top">
-  <button class="ico" id="menu" aria-label="Abrir ou recolher menu">☰</button>
-  <input class="search" placeholder="Buscar requisição, pedido, material ou ferramenta" aria-label="Busca rápida">
-  <button class="ico" id="theme" aria-label="Alternar modo claro e escuro">◐</button>
-  <div class="who">Rodrigo<br>MASTERS · todas as obras</div>
+  <button class="ico" id="mb" aria-label="Abrir menu">☰</button>
+  <button class="ico" id="th" aria-label="Alternar modo claro e escuro">◐</button>
+  <div class="who" id="who"></div>
+  <button class="sec" id="out">Sair</button>
  </div>
-
- <section class="view on" id="v-painel">
-  <h1>Painel gerencial</h1>
-  <p class="sub">Atualizado em tempo real. Os números abaixo são dados de exemplo.</p>
-  <div class="kpis">
-   <div class="card kpi"><b>4</b><span>Obras ativas</span></div>
-   <div class="card kpi"><b>245</b><span>Ferramentas cadastradas</span></div>
-   <div class="card kpi"><b>86</b><span>Ferramentas em uso</span></div>
-   <div class="card kpi"><b>R$ 318 mil</b><span>Valor patrimonial</span></div>
-   <div class="card kpi al"><b>7</b><span>Requisições aguardando aprovação</span></div>
-   <div class="card kpi al"><b>5</b><span>Previsões vencidas</span></div>
-   <div class="card kpi al"><b>9</b><span>Materiais abaixo do mínimo</span></div>
-   <div class="card kpi"><b>3</b><span>Recebimentos pendentes</span></div>
-  </div>
-  <div class="card" style="margin-top:12px">
-   <h3>Caminho das compras</h3>
-   <div class="flow">
-    <div class="st done"><b>12</b>Solicitadas</div><div class="st done"><b>9</b>No Sienge</div>
-    <div class="st warn"><b>7</b>Aguardando aprovação</div><div class="st done"><b>14</b>Pedido emitido</div>
-    <div class="st"><b>11</b>Aguardando entrega</div><div class="st warn"><b>5</b>Previsão vencida</div>
-    <div class="st"><b>4</b>Recebimento parcial</div><div class="st done"><b>38</b>Concluídas</div>
-   </div>
-  </div>
-  <div class="grid">
-   <div class="card"><h3>Ferramentas por obra</h3>
-    <svg viewBox="0 0 320 170" width="100%" role="img" aria-label="Ferramentas por obra: Hospital 96, Torre 72, Galpão 48, Escola 29">
-     <g fill="var(--blue)"><rect x="20" y="14" width="54" height="116" rx="4"/><rect x="95" y="43" width="54" height="87" rx="4" fill="var(--b2)"/><rect x="170" y="72" width="54" height="58" rx="4" fill="var(--b2)"/><rect x="245" y="95" width="54" height="35" rx="4" fill="var(--b3)"/></g>
-     <g fill="var(--ink)" font-size="13" font-weight="700" text-anchor="middle"><text x="47" y="10">96</text><text x="122" y="39">72</text><text x="197" y="68">48</text><text x="272" y="91">29</text></g>
-     <g fill="var(--mute)" font-size="12" text-anchor="middle"><text x="47" y="150">Hospital</text><text x="122" y="150">Torre</text><text x="197" y="150">Galpão</text><text x="272" y="150">Escola</text></g>
-    </svg></div>
-   <div class="card"><h3>Situação das ferramentas</h3>
-    <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
-     <svg viewBox="0 0 100 100" width="150" height="150" role="img" aria-label="Disponível 142, em uso 86, em manutenção 12, extraviada 5">
-      <g fill="none" stroke-width="16" transform="rotate(-90 50 50)">
-       <circle cx="50" cy="50" r="40" stroke="var(--blue)" stroke-dasharray="145.7 251.3"/>
-       <circle cx="50" cy="50" r="40" stroke="var(--b2)" stroke-dasharray="88.2 251.3" stroke-dashoffset="-145.7"/>
-       <circle cx="50" cy="50" r="40" stroke="var(--b3)" stroke-dasharray="12.3 251.3" stroke-dashoffset="-233.9"/>
-       <circle cx="50" cy="50" r="40" stroke="var(--red)" stroke-dasharray="5.1 251.3" stroke-dashoffset="-246.2"/></g>
-      <text x="50" y="55" text-anchor="middle" font-size="16" font-weight="800" fill="var(--ink)">245</text></svg>
-     <div class="legend" style="flex-direction:column"><span><s style="background:var(--blue)"></s>Disponível · 142</span><span><s style="background:var(--b2)"></s>Em uso · 86</span><span><s style="background:var(--b3)"></s>Em manutenção · 12</span><span><s style="background:var(--red)"></s>Extraviada · 5</span></div>
-    </div></div>
-  </div>
- </section>
-
- <section class="view" id="v-req">
-  <h1>Requisições Sienge</h1>
-  <p class="sub">Consulte pelo celular sem abrir o Sienge. Toque em uma linha para ver os materiais.</p>
-  <div class="tools">
-   <select aria-label="Obra"><option>Todas as obras</option><option>Hospital</option><option>Torre</option></select>
-   <select aria-label="Situação"><option>Todas as situações</option><option>Aguardando entrega</option><option>Previsão vencida</option></select>
-   <select aria-label="Período"><option>Últimos 30 dias</option><option>Este mês</option></select>
-   <button class="btn" data-toast="A importação entra na Etapa 7.">Importar do Sienge</button>
-  </div>
-  <div class="card wrap"><table>
-   <thead><tr><th>Requisição</th><th>Obra</th><th>Solicitante</th><th>Aprovação</th><th>Pedido</th><th>Previsão</th><th>Status</th></tr></thead>
-   <tbody>
-    <tr class="r" data-d="d1"><td><b>48213</b></td><td>Hospital</td><td>Carlos</td><td>03/11/2026</td><td>05/11/2026</td><td>12/11/2026</td><td><span class="chip bad">Previsão vencida</span></td></tr>
-    <tr class="det" id="d1" hidden><td colspan="7"><b>Materiais da requisição 48213</b>
-     <table><thead><tr><th>Material</th><th>Solicitado</th><th>Comprado</th><th>Recebido</th><th>Pendente</th></tr></thead>
-     <tbody><tr><td>Eletroduto 3/4"</td><td>200 m</td><td>200 m</td><td>120 m</td><td>80 m</td></tr><tr><td>Caixa 4x2</td><td>60 un</td><td>40 un</td><td>0</td><td>60 un</td></tr></tbody></table>
-     <div class="just"><b>Previsão alterada</b> de 10/11/2026 para 12/11/2026 por Suprimentos em 09/11/2026 às 14:32. Justificativa: fornecedor informou atraso na fábrica.</div></td></tr>
-    <tr class="r" data-d="d2"><td><b>48250</b></td><td>Torre</td><td>Marcos</td><td>06/11/2026</td><td>09/11/2026</td><td>17/11/2026</td><td><span class="chip">Aguardando entrega</span></td></tr>
-    <tr class="det" id="d2" hidden><td colspan="7"><b>Materiais da requisição 48250</b>
-     <table><thead><tr><th>Material</th><th>Solicitado</th><th>Comprado</th><th>Recebido</th><th>Pendente</th></tr></thead>
-     <tbody><tr><td>Disco de corte 7"</td><td>50 un</td><td>50 un</td><td>0</td><td>50 un</td></tr></tbody></table></td></tr>
-    <tr class="r" data-d="d3"><td><b>48301</b></td><td>Galpão</td><td>Ana</td><td>—</td><td>—</td><td>—</td><td><span class="chip">Aguardando aprovação</span></td></tr>
-    <tr class="det" id="d3" hidden><td colspan="7">Aguardando a aprovação do gestor. Nenhum pedido de compra emitido ainda.</td></tr>
-    <tr class="r" data-d="d4"><td><b>48190</b></td><td>Escola</td><td>Paulo</td><td>28/10/2026</td><td>30/10/2026</td><td>06/11/2026</td><td><span class="chip ok">Concluída</span></td></tr>
-    <tr class="det" id="d4" hidden><td colspan="7">Todos os itens recebidos e conferidos pelo almoxarife em 06/11/2026.</td></tr>
-   </tbody></table></div>
-  <div class="note">A previsão é calculada em 5 dias úteis após o pedido, sem fins de semana nem feriados cadastrados. Só muda com justificativa, que fica visível para todos.</div>
- </section>
-
- <section class="view" id="v-x">
-  <h1>Módulo em construção</h1>
-  <p class="sub">Este módulo será implantado na Etapa 6. O menu e a navegação já mostram onde ele ficará.</p>
-  <div class="card">Cada módulo terá pesquisa, filtros, formulários simples e confirmação antes de operações importantes.</div>
- </section>
+ <div id="view"></div>
 </main>
+<dialog id="dlg"></dialog>
 <div class="toast" id="toast" role="status"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.50.0/dist/umd/supabase.min.js"></script>
 <script>
-var b=document.body,R=document.documentElement;
-function toast(t){var e=document.getElementById('toast');e.textContent=t;e.classList.add('on');setTimeout(function(){e.classList.remove('on')},2200)}
-try{var s=localStorage.getItem('mt');if(s)R.setAttribute('data-theme',s)}catch(e){}
-document.getElementById('theme').onclick=function(){var d=R.getAttribute('data-theme')==='dark'||(!R.getAttribute('data-theme')&&matchMedia('(prefers-color-scheme:dark)').matches);var n=d?'light':'dark';R.setAttribute('data-theme',n);try{localStorage.setItem('mt',n)}catch(e){}};
-document.getElementById('menu').onclick=function(){if(innerWidth<=820)b.classList.toggle('open');else b.classList.toggle('mini')};
-document.getElementById('scrim').onclick=function(){b.classList.remove('open')};
-document.querySelectorAll('.nav').forEach(function(n){n.onclick=function(){document.querySelectorAll('.nav').forEach(function(x){x.classList.remove('on')});n.classList.add('on');document.querySelectorAll('.view').forEach(function(v){v.classList.remove('on')});document.getElementById('v-'+n.dataset.v).classList.add('on');b.classList.remove('open')}});
-document.querySelectorAll('tr.r').forEach(function(r){r.onclick=function(){var d=document.getElementById(r.dataset.d);d.hidden=!d.hidden}});
-document.querySelectorAll('[data-toast]').forEach(function(x){x.onclick=function(){toast(x.dataset.toast)}});
+const SB_URL='https://ruhszeqebmngpmahwkvk.supabase.co',SB_KEY='sb_publishable_PejdDMttoQYXx_xOzwiuag_cjy_azOe';
+const $=s=>document.querySelector(s),R=document.documentElement;
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let sb,me=null,cache={},cur='painel';
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');setTimeout(()=>e.classList.remove('on'),2800)}
+function msg(e){const c=e.code,m=e.message||'';
+ if(c==='23505')return 'Já existe um cadastro com este código, número ou identificação. Confira antes de gravar.';
+ if(c==='23503')return 'Escolha um valor válido nas listas.';
+ if(c==='23514'||c==='23502')return 'Há campo obrigatório vazio ou valor inválido.';
+ if(c==='42501'||/row-level security/i.test(m))return 'Você não tem permissão para esta ação nesta obra.';
+ if(/fetch|network|load failed/i.test(m))return 'Sem conexão com a internet. Nada foi gravado.';
+ return m}
+
+/* ===== o que cada cadastro contém ===== */
+const SIT=['Ativo','Afastado','Desligado'];
+const E={
+obras:{p:'Obras',btn:'Cadastrar obra',vazio:'Nenhuma obra cadastrada ainda.',adm:1,cols:['codigo','nome','responsavel','status'],f:[
+ {k:'codigo',l:'Código da obra',r:1,h:'Código interno usado pela Masters.'},
+ {k:'nome',l:'Nome da obra',r:1},{k:'endereco',l:'Endereço'},{k:'responsavel',l:'Responsável'},{k:'encarregado',l:'Encarregado'},
+ {k:'data_inicio',l:'Data de início',t:'date'},{k:'status',l:'Situação',t:'sel',o:['Ativa','Pausada','Concluída'],d:'Ativa'}]},
+disciplinas:{p:'Disciplinas',btn:'Cadastrar disciplina',vazio:'Nenhuma disciplina cadastrada ainda.',adm:1,cols:['nome','ativo'],f:[
+ {k:'nome',l:'Nome da disciplina',r:1,h:'Área de trabalho do profissional.'},{k:'ativo',l:'Disponível para uso',t:'bool',d:true}]},
+categorias:{p:'Categorias',btn:'Cadastrar categoria',vazio:'Nenhuma categoria cadastrada ainda.',cols:['tipo','nome'],f:[
+ {k:'tipo',l:'Para que serve',r:1,t:'sel',o:['Ferramenta','Material'],d:'Ferramenta'},{k:'nome',l:'Nome da categoria',r:1}]},
+funcionarios:{p:'Funcionários',btn:'Cadastrar funcionário',vazio:'Nenhum funcionário cadastrado ainda.',cols:['matricula','nome','obra_id','situacao'],f:[
+ {k:'matricula',l:'Matrícula ou identificação',r:1,h:'Não pode repetir.'},{k:'nome',l:'Nome completo',r:1},
+ {k:'obra_id',l:'Obra',r:1,t:'ref',ref:'obras',lab:'nome'},
+ {k:'disciplina_id',l:'Disciplina ou função',t:'ref',ref:'disciplinas',lab:'nome'},{k:'cargo',l:'Cargo'},
+ {k:'encarregado_id',l:'Encarregado',t:'ref',ref:'funcionarios',lab:'nome'},
+ {k:'situacao',l:'Situação',t:'sel',o:SIT,d:'Ativo',h:'Funcionário não precisa ter login para existir aqui.'}]},
+fornecedores:{p:'Fornecedores',btn:'Cadastrar fornecedor',vazio:'Nenhum fornecedor cadastrado ainda.',cols:['nome','cnpj','contato'],f:[
+ {k:'nome',l:'Nome do fornecedor',r:1},{k:'cnpj',l:'CNPJ'},{k:'contato',l:'Contato (telefone ou e-mail)'},{k:'ativo',l:'Disponível para uso',t:'bool',d:true}]},
+materiais:{p:'Materiais',btn:'Cadastrar material',vazio:'Nenhum material cadastrado ainda.',cols:['codigo','descricao','unidade','categoria_id'],f:[
+ {k:'codigo',l:'Código do material',r:1,h:'Não pode repetir.'},{k:'descricao',l:'Descrição',r:1},
+ {k:'categoria_id',l:'Categoria',t:'ref',ref:'categorias',lab:'nome',w:['tipo','Material']},
+ {k:'unidade',l:'Unidade de medida',r:1,h:'Como o material é contado: metro, peça, caixa...'},
+ {k:'estoque_minimo',l:'Estoque mínimo',t:'num',h:'O sistema avisará quando ficar abaixo disso.'},{k:'ativo',l:'Disponível para uso',t:'bool',d:true}]},
+ferramentas:{p:'Ferramentas',btn:'Cadastrar ferramenta',vazio:'Nenhuma ferramenta cadastrada ainda.',cols:['codigo_patrimonial','nome','obra_id','situacao'],f:[
+ {k:'codigo_patrimonial',l:'Código de identificação (patrimônio)',r:1,h:'Não pode repetir.'},{k:'nome',l:'Nome da ferramenta',r:1},{k:'descricao',l:'Descrição',t:'area'},
+ {k:'categoria_id',l:'Categoria',t:'ref',ref:'categorias',lab:'nome',w:['tipo','Ferramenta']},{k:'marca',l:'Marca'},{k:'modelo',l:'Modelo'},
+ {k:'numero_serie',l:'Número de série',h:'Preencha se houver.'},{k:'valor_aquisicao',l:'Valor de aquisição (R$)',t:'num'},{k:'data_aquisicao',l:'Data de aquisição',t:'date'},
+ {k:'conservacao',l:'Estado de conservação',t:'sel',o:['Novo','Bom','Regular','Ruim'],d:'Bom'},
+ {k:'obra_id',l:'Obra',r:1,t:'ref',ref:'obras',lab:'nome'},{k:'localizacao',l:'Localização na obra'},
+ {k:'situacao',l:'Situação atual',t:'sel',o:['Disponível','Em manutenção','Extraviada','Baixada'],d:'Disponível',h:'Para retirar ou devolver, use os botões da lista.'}]}
+};
+const rk=f=>f.ref+(f.w?f.w.join(':'):'');
+const canW=e=>me&&(e.adm?me.perfil==='MASTERS':me.perfil!=='FUNCIONARIO');
+async function loadRefs(fs){for(const f of fs.filter(f=>f.t==='ref')){const k=rk(f);if(!cache[k]){let q=sb.from(f.ref).select('*').order(f.lab);if(f.w)q=q.eq(f.w[0],f.w[1]);const{data}=await q;cache[k]=data||[]}}}
+function cell(f,v){if(v==null||v==='')return '—';
+ if(f.t==='ref'){const r=(cache[rk(f)]||[]).find(x=>x.id===v);return esc(r?r[f.lab]:'—')}
+ if(f.t==='date')return new Date(v+'T00:00').toLocaleDateString('pt-BR');
+ if(f.t==='bool')return v?'Sim':'Não';
+ if(f.k==='situacao'||f.k==='status'){const c=/Extraviada|Baixada|Desligado/.test(v)?'red':/Em uso|Ativ|Dispon/.test(v)?'blue':'';return `<span class="chip ${c}">${esc(v)}</span>`}
+ return esc(v)}
+
+/* ===== janela de formulário ===== */
+function modal(title,html,ok,fn){const d=$('#dlg');
+ d.innerHTML=`<h2>${title}</h2><div>${html}</div><div class="err hide" id="me"></div><div class="acts"><button class="sec" type="button" id="mc">${ok?'Cancelar':'Fechar'}</button>${ok?`<button class="btn" type="button" id="mo">${ok}</button>`:''}</div>`;
+ d.showModal();$('#mc').onclick=()=>d.close();
+ if(ok)$('#mo').onclick=async()=>{const b=$('#mo');b.disabled=true;let er;try{er=await fn()}catch(x){er=msg(x)}
+  if(er){$('#me').textContent=er;$('#me').classList.remove('hide');b.disabled=false}else d.close()}}
+function fld(f,row){let v=row?row[f.k]:f.d;if(v==null)v='';const id='f_'+f.k;let i;
+ if(f.t==='sel')i=`<select id="${id}">${f.o.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('')}</select>`;
+ else if(f.t==='ref'){const L=cache[rk(f)]||[];i=`<select id="${id}"><option value="">Selecione…</option>${L.map(o=>`<option value="${o.id}" ${o.id===v?'selected':''}>${esc(o[f.lab])}</option>`).join('')}</select>`+(L.length?'':`<div class="hint" style="color:var(--red)">Nenhuma opção ainda. Cadastre primeiro em ${E[f.ref].p}.</div>`)}
+ else if(f.t==='bool')i=`<input id="${id}" type="checkbox" style="width:24px;min-height:24px" ${v?'checked':''}>`;
+ else if(f.t==='area')i=`<textarea id="${id}" rows="3">${esc(v)}</textarea>`;
+ else i=`<input id="${id}" type="${f.t==='date'?'date':f.t==='num'?'number':'text'}" ${f.t==='num'?'step="any" min="0" inputmode="decimal"':''} value="${esc(v)}">`;
+ return `<label class="fl" for="${id}">${f.l}${f.r?' <b class="rq">*</b>':''}</label>${i}${f.h?`<div class="hint">${f.h}</div>`:''}`}
+async function form(name,row){const e=E[name];await loadRefs(e.f);
+ const fs=e.f.filter(f=>!(f.k==='situacao'&&row&&row.situacao==='Em uso'));
+ modal(row?'Editar':e.btn,'<div class="hint">Os campos com <b class="rq">*</b> são obrigatórios.</div>'+fs.map(f=>fld(f,row)).join(''),row?'Salvar alterações':'Gravar cadastro',async()=>{
+  const v={},falta=[];
+  for(const f of fs){const el=$('#f_'+f.k);let x=f.t==='bool'?el.checked:el.value.trim();if(x===''){if(f.r)falta.push(f.l);x=null}else if(f.t==='num')x=Number(x);v[f.k]=x}
+  if(falta.length)return 'Falta preencher: '+falta.join(', ')+'.';
+  if(row&&!confirm('Salvar as alterações deste cadastro?'))return 'Nada foi alterado.';
+  const{error}=row?await sb.from(name).update(v).eq('id',row.id):await sb.from(name).insert(v);
+  if(error)return msg(error);
+  cache={};toast(row?'Alterações salvas.':'Cadastro gravado.');show(name)})}
+
+/* ===== ferramentas: retirar, devolver, histórico ===== */
+async function retirar(r){const{data}=await sb.from('funcionarios').select('id,nome,matricula').eq('obra_id',r.obra_id).eq('situacao','Ativo').order('nome');
+ if(!data||!data.length){toast('Cadastre antes um funcionário ativo desta obra.');return}
+ modal('Retirar: '+esc(r.nome),`<label class="fl" for="rf">Quem está retirando? <b class="rq">*</b></label><select id="rf"><option value="">Selecione…</option>${data.map(x=>`<option value="${x.id}">${esc(x.nome)} (${esc(x.matricula)})</option>`).join('')}</select><label class="fl" for="ro">Observação</label><input id="ro">`,'Confirmar retirada',async()=>{
+  const p=$('#rf').value;if(!p)return 'Escolha quem está retirando.';
+  if(!confirm('Confirmar a retirada desta ferramenta?'))return 'Nada foi gravado.';
+  const{error}=await sb.rpc('retirar_ferramenta',{p_ferramenta:r.id,p_funcionario:p,p_obs:$('#ro').value.trim()||null});
+  if(error)return msg(error);toast('Retirada registrada.');show('ferramentas')})}
+async function devolver(r){if(!confirm('Confirmar a devolução de "'+r.nome+'"?'))return;
+ const{error}=await sb.rpc('devolver_ferramenta',{p_ferramenta:r.id,p_obs:null});
+ if(error)toast(msg(error));else{toast('Devolução registrada.');show('ferramentas')}}
+async function hist(r){await loadRefs([{t:'ref',ref:'funcionarios',lab:'nome'}]);
+ const{data,error}=await sb.from('ferramenta_movs').select('*').eq('ferramenta_id',r.id).order('em',{ascending:false});
+ const L=cache.funcionarios||[];
+ modal('Histórico: '+esc(r.nome),error?msg(error):!data.length?'<p class="empty">Ainda não houve retiradas nem devoluções.</p>':data.map(m=>{const f=L.find(x=>x.id===m.funcionario_id);
+  return `<div class="mv"><b>${m.tipo}:</b> ${esc(f?f.nome:'—')}<br><span class="hint">${new Date(m.em).toLocaleString('pt-BR')}${m.observacao?' — '+esc(m.observacao):''}</span></div>`}).join(''))}
+
+/* ===== telas ===== */
+async function show(name){cur=name;mark();const e=E[name];const v=$('#view');
+ v.innerHTML=`<h1>${e.p}</h1><p class="sub" id="sb">Carregando…</p>`;
+ try{await loadRefs(e.f);
+  const{data,error}=await sb.from(name).select('*').order('criado_em',{ascending:false}).limit(1000);
+  if(error)throw error;
+  const cols=e.cols.map(k=>e.f.find(f=>f.k===k));
+  v.innerHTML=`<h1>${e.p}</h1><p class="sub">${data.length} cadastrado(s)</p><div class="bar"><input id="q" type="search" placeholder="Pesquisar em ${e.p.toLowerCase()}" aria-label="Pesquisar">${canW(e)?`<button class="btn" id="nw">${e.btn}</button>`:''}</div>
+  <div class="card wrap">${data.length?`<table><thead><tr>${cols.map(c=>`<th>${c.l}</th>`).join('')}<th></th></tr></thead><tbody>${data.map((r,i)=>`<tr data-i="${i}">${cols.map(c=>`<td>${cell(c,r[c.k])}</td>`).join('')}<td style="white-space:nowrap">${acts(name,r)}</td></tr>`).join('')}</tbody></table>`:`<div class="empty">${e.vazio}${canW(e)?`<br>Clique em “${e.btn}” para começar.`:''}</div>`}</div>`;
+  if($('#nw'))$('#nw').onclick=()=>form(name);
+  if($('#q'))$('#q').oninput=x=>{const t=x.target.value.toLowerCase();v.querySelectorAll('tbody tr').forEach(tr=>tr.classList.toggle('hide',!tr.textContent.toLowerCase().includes(t)))};
+  v.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{const r=data[b.closest('tr').dataset.i],a=b.dataset.a;
+   ({edit:()=>form(name,r),ret:()=>retirar(r),dev:()=>devolver(r),his:()=>hist(r)})[a]()});
+ }catch(x){v.innerHTML=`<h1>${e.p}</h1><div class="err">${esc(msg(x))}</div>`}}
+function acts(name,r){let h='';
+ if(name==='ferramentas'){if(canW(E[name])){if(r.situacao==='Disponível')h+='<button class="mini" data-a="ret">Retirar</button>';if(r.situacao==='Em uso')h+='<button class="mini" data-a="dev">Devolver</button>'}h+='<button class="mini" data-a="his">Histórico</button>'}
+ if(canW(E[name]))h+='<button class="mini" data-a="edit">Editar</button>';return h}
+async function painel(){cur='painel';mark();const v=$('#view');
+ const T=[['obras','Obras'],['funcionarios','Funcionários'],['ferramentas','Ferramentas'],['materiais','Materiais']];
+ const n=await Promise.all(T.map(t=>sb.from(t[0]).select('id',{count:'exact',head:true})));
+ v.innerHTML=`<h1>Painel</h1><p class="sub">Bem-vindo(a), ${esc(me.nome||'')}. Os números abaixo vêm do banco de dados.</p>
+ <div class="kpis">${T.map((t,i)=>`<div class="card kpi"><b>${n[i].count==null?'—':n[i].count}</b>${t[1]}</div>`).join('')}</div>
+ <div class="card"><h3 style="margin-top:0">Por onde começar</h3><ol class="steps">
+ <li>Cadastre as <button class="link" data-g="obras">obras</button> (somente o administrador).</li>
+ <li>Cadastre as <button class="link" data-g="disciplinas">disciplinas</button> e as <button class="link" data-g="categorias">categorias</button>.</li>
+ <li>Cadastre os <button class="link" data-g="funcionarios">funcionários</button>.</li>
+ <li>Cadastre as <button class="link" data-g="ferramentas">ferramentas</button> e os <button class="link" data-g="materiais">materiais</button>.</li></ol></div>`;
+ v.querySelectorAll('[data-g]').forEach(b=>b.onclick=()=>show(b.dataset.g))}
+function mark(){document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('on',n.dataset.v===cur));document.body.classList.remove('open')}
+function menu(){const g=(t,l)=>`<h4>${t}</h4>`+l.map(k=>`<button class="nav" data-v="${k}">${E[k].p}</button>`).join('');
+ $('#menu').innerHTML=`<button class="nav" data-v="painel">Painel</button>`+g('Cadastros',['obras','funcionarios','ferramentas','materiais','fornecedores','disciplinas','categorias'])+
+ `<h4>Em breve</h4><div class="soon">Malões e malas</div><div class="soon">Solicitações e pedidos</div><div class="soon">Usuários</div>`;
+ document.querySelectorAll('.nav').forEach(n=>n.onclick=()=>n.dataset.v==='painel'?painel():show(n.dataset.v))}
+
+/* ===== entrada e saída ===== */
+function tela(l){$('#login').classList.toggle('hide',l!=='login');$('#side').classList.toggle('hide',l!=='app');$('#app').classList.toggle('hide',l!=='app')}
+async function entrar(){const{data:{session}}=await sb.auth.getSession();if(!session){tela('login');return}
+ const{data,error}=await sb.from('perfis').select('*').eq('id',session.user.id).maybeSingle();
+ if(error||!data||!data.ativo){await sb.auth.signOut();tela('login');const e=$('#le');e.textContent=error?msg(error):'Seu acesso ainda não foi liberado pelo administrador.';e.classList.remove('hide');return}
+ me=data;cache={};$('#who').innerHTML=esc(me.nome||me.login)+'<br>'+esc(me.perfil);menu();tela('app');painel()}
+window.onload=()=>{
+ if(typeof supabase==='undefined'){tela('login');const e=$('#le');e.textContent='Não foi possível carregar o sistema. Verifique a internet e atualize a página.';e.classList.remove('hide');return}
+ sb=supabase.createClient(SB_URL,SB_KEY);
+ try{const s=localStorage.getItem('mt');if(s)R.setAttribute('data-theme',s)}catch(x){}
+ $('#th').onclick=()=>{const d=R.getAttribute('data-theme')==='dark'||(!R.getAttribute('data-theme')&&matchMedia('(prefers-color-scheme:dark)').matches),n=d?'light':'dark';R.setAttribute('data-theme',n);try{localStorage.setItem('mt',n)}catch(x){}};
+ $('#mb').onclick=()=>document.body.classList.toggle('open');$('#scrim').onclick=()=>document.body.classList.remove('open');
+ $('#out').onclick=async()=>{await sb.auth.signOut();me=null;tela('login')};
+ $('#lf').onsubmit=async ev=>{ev.preventDefault();const b=$('#lb'),e=$('#le');b.disabled=true;e.classList.add('hide');
+  const{error}=await sb.auth.signInWithPassword({email:$('#em').value.trim(),password:$('#pw').value});b.disabled=false;
+  if(error){e.textContent=/invalid/i.test(error.message)?'E-mail ou senha incorretos.':msg(error);e.classList.remove('hide');return}
+  $('#pw').value='';entrar()};
+ entrar()};
 </script>
 </body>
 </html>
