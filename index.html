@@ -72,7 +72,7 @@ main{padding:0 12px 40px}h1{font-size:21px}.top .who{display:none}
  <img src="assets/logo.png" alt="Masters Engenharia" height="70">
  <h1 style="text-align:center">Entrar no Masters Gestão</h1>
  <form id="lf">
-  <label class="fl" for="em">E-mail ou login <b class="rq">*</b></label><input id="em" type="email" autocomplete="username" required>
+  <label class="fl" for="em">Usuário <b class="rq">*</b></label><input id="em" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required><div class="hint">Digite só o seu usuário, sem e-mail.</div>
   <label class="fl" for="pw">Senha <b class="rq">*</b></label><input id="pw" type="password" autocomplete="current-password" required>
   <div class="err hide" id="le"></div>
   <div class="acts"><button class="btn" id="lb" style="width:100%">Entrar</button></div>
@@ -239,8 +239,9 @@ window.onload=()=>{
  $('#mb').onclick=()=>document.body.classList.toggle('open');$('#scrim').onclick=()=>document.body.classList.remove('open');
  $('#out').onclick=async()=>{await sb.auth.signOut();me=null;tela('login')};
  $('#lf').onsubmit=async ev=>{ev.preventDefault();const b=$('#lb'),e=$('#le');b.disabled=true;e.classList.add('hide');
-  const{error}=await sb.auth.signInWithPassword({email:$('#em').value.trim(),password:$('#pw').value});b.disabled=false;
-  if(error){e.textContent=/invalid/i.test(error.message)?'E-mail ou senha incorretos.':msg(error);e.classList.remove('hide');return}
+  let u=$('#em').value.trim().toLowerCase().replace(/\s+/g,'');if(u.indexOf('@')<0)u+='@masters.local';
+  const{error}=await sb.auth.signInWithPassword({email:u,password:$('#pw').value});b.disabled=false;
+  if(error){e.textContent=/invalid/i.test(error.message)?'Usuário ou senha incorretos.':msg(error);e.classList.remove('hide');return}
   $('#pw').value='';entrar()};
  entrar()};
 </script>
