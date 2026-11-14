@@ -473,5 +473,37 @@ window.__impSolicTeste={ler,validar,parseData,num,achaSienge,abrir};
  const av=()=>{const t=document.getElementById('toast');if(t){t.textContent='Importação de solicitações não carregou: '+e.message;t.classList.add('on')}};
  if(document.readyState==='complete')av();else window.addEventListener('load',av)}
 </script>
+ <style>
+/* 3B-5e: menu ☰ — no computador recolhe/expande a barra lateral; no celular abre/fecha sobre a tela */
+@media (min-width:821px){body.recolhido aside{display:none}}
+#mfechar{display:none}
+@media (max-width:820px){
+ aside{padding-top:44px}
+ body.open #mfechar{display:grid;place-items:center;position:fixed;top:6px;left:204px;width:40px;height:36px;min-height:0;padding:0;font-size:18px;z-index:30;background:#fff;color:#313E86;border:0;border-radius:8px;cursor:pointer}}
+</style>
+<script>
+(function(){
+ if(window.__menuHamb)return;window.__menuHamb=1;
+ const larga=()=>window.matchMedia('(min-width:821px)').matches;
+ const btn=()=>document.getElementById('mb');
+ const sd=document.getElementById('side');
+ if(sd&&!document.getElementById('mfechar')){const x=document.createElement('button');x.id='mfechar';x.type='button';x.setAttribute('aria-label','Fechar menu');x.textContent='✕';document.body.appendChild(x)}
+ function estado(){const b=btn();if(!b)return;const aberto=larga()?!document.body.classList.contains('recolhido'):document.body.classList.contains('open');
+  b.setAttribute('aria-expanded',aberto?'true':'false');b.setAttribute('aria-label',aberto?'Fechar menu':'Abrir menu')}
+ function alternar(){
+  if(larga()){const r=document.body.classList.toggle('recolhido');try{localStorage.setItem('mm',r?'1':'0')}catch(x){}}
+  else document.body.classList.toggle('open');
+  estado()}
+ /* tratadores no documento (fase de captura): valem mesmo que a tela seja redesenhada e substituem o tratador antigo do botão */
+ document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('#mb,#mfechar');if(!t)return;e.stopPropagation();e.preventDefault();
+  if(t.id==='mfechar'){document.body.classList.remove('open');estado()}else alternar()},true);
+ document.addEventListener('click',e=>{if(e.target.closest&&e.target.closest('#menu .nav')){document.body.classList.remove('open');estado()}});
+ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.body.classList.contains('open')){document.body.classList.remove('open');estado()}});
+ window.addEventListener('resize',()=>{if(larga())document.body.classList.remove('open');estado()});
+ try{if(localStorage.getItem('mm')==='1')document.body.classList.add('recolhido')}catch(x){}
+ const sc=document.getElementById('scrim');if(sc)sc.addEventListener('click',()=>setTimeout(estado,0));
+ estado();
+})();
+</script>
 </body>
 </html>
