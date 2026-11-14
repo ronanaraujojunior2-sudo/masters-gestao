@@ -253,7 +253,12 @@ window.onload=()=>{
  $('#mb').onclick=()=>document.body.classList.toggle('open');$('#scrim').onclick=()=>document.body.classList.remove('open');
  $('#out').onclick=async()=>{await sb.auth.signOut();me=null;tela('login')};
  $('#lf').onsubmit=async ev=>{ev.preventDefault();const b=$('#lb'),e=$('#le');b.disabled=true;e.classList.add('hide');
-  let u=$('#em').value.trim().toLowerCase().replace(/\s+/g,'');if(u.indexOf('@')<0)u+='@masters.local';
+let u=$('#em').value.trim().toLowerCase().replace(/\s+/g,'');
+if(u === 'masters') {
+  u = 'ronanaraujunior@gmail.com';
+} else if(u.indexOf('@') < 0) {
+  u += '@masters.local';
+}
   const{error}=await sb.auth.signInWithPassword({email:u,password:$('#pw').value});b.disabled=false;
   if(error){e.textContent=/invalid/i.test(error.message)?'Usuário ou senha incorretos.':msg(error);e.classList.remove('hide');return}
   $('#pw').value='';entrar()};
