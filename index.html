@@ -268,9 +268,9 @@ if(u === 'masters') {
  <script src="modulo-compras.js"></script>
  <script src="modulo-importar.js"></script>
  <script src="modulo-materiais.js"></script>
-<script>
-/* MASTERS GESTÃO - 3B-5: importar solicitações de materiais (embutido no index.html) */
-(function(){
+ <script>
+/* MASTERS GESTÃO - 3B-5d: importar solicitações de materiais (embutido no index.html) */
+try{(function(){
 if(!window.XLSX&&!document.querySelector('script[data-xls]')){const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';s.setAttribute('data-xls','1');document.head.appendChild(s)}
 
 const nz=s=>String(s==null?'':s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\*/g,'').toLowerCase().trim().replace(/\s+/g,' ');
@@ -442,34 +442,36 @@ async function processar(files){const R=$('#sx_r');if(!files||!files.length)retu
    cache={};R.innerHTML='<div class="card"><h3 style="margin-top:0">Resultado da importação</h3>'+relatorio(data)+'<p class="hint">Confira em “Solicitações e pedidos”. Os materiais novos estão em “Materiais”, marcados para conferência.</p></div>';toast('Importação concluída.')}
  }catch(e){R.innerHTML='<div class="err">'+esc(e.message||msg(e))+'</div>'}}
 
-/* botão no menu "Compras", logo abaixo de "Solicitações e pedidos" (se não achar, fica abaixo de "Painel") */
-function poeBotao(){const m=document.getElementById('menu');if(!m||!me||me.perfil==='FUNCIONARIO'||m.querySelector('[data-v="imp_solic"]'))return;
+/* abre a importação e já mostra a janela de escolha de arquivo (chamado direto pelos dois botões) */
+function abrir(){tela();const f=document.getElementById('sx_f');if(f)f.click()}
+
+/* botão 1: no menu lateral, logo abaixo de "Solicitações e pedidos" */
+function poeMenu(){const m=document.getElementById('menu');if(!m||!me||me.perfil==='FUNCIONARIO'||m.querySelector('[data-v="imp_solic"]'))return;
  const b=document.createElement('button');b.className='nav';b.setAttribute('data-v','imp_solic');b.textContent='Importar solicitações';
  const alvo=[...m.querySelectorAll('button.nav')].find(x=>x.textContent.trim()==='Solicitações e pedidos')||m.querySelector('.nav[data-v="painel"]');
  if(alvo)alvo.insertAdjacentElement('afterend',b);else m.insertBefore(b,m.firstChild);
  if(cur==='imp_solic')b.classList.add('on')}
-const _m=menu;menu=function(){_m();poeBotao()};
-new MutationObserver(poeBotao).observe(document.getElementById('menu'),{childList:true});
-document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-v="imp_solic"]');if(b){e.stopPropagation();e.preventDefault();tela()}},true);
-poeBotao();
+/* botão 2: dentro da tela Solicitações e pedidos, ao lado de "Nova solicitação" */
+function poeBarra(){const v=document.getElementById('view'),h=v&&v.querySelector('h1');
+ if(!h||h.textContent.trim()!=='Solicitações e pedidos'||!me||me.perfil==='FUNCIONARIO')return;
+ const bar=v.querySelector('.bar');if(!bar||bar.querySelector('#imp_sol_btn'))return;
+ const b=document.createElement('button');b.id='imp_sol_btn';b.type='button';b.className='sec';b.setAttribute('data-imp','abrir');b.textContent='Importar solicitações (Sienge)';bar.appendChild(b)}
+/* um único tratador de clique para os dois botões; funciona mesmo depois de a tela ser redesenhada */
+document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-v="imp_solic"],[data-imp="abrir"]');
+ if(!t)return;e.stopPropagation();e.preventDefault();
+ if(t.getAttribute('data-imp')==='abrir')abrir();else tela()},true);
+const _m=menu;menu=function(){_m();poeMenu()};
+new MutationObserver(poeMenu).observe(document.getElementById('menu'),{childList:true});
+new MutationObserver(poeBarra).observe(document.getElementById('view'),{childList:true,subtree:true});
+poeMenu();poeBarra();
+/* etiqueta de versão no fim do menu */
+document.querySelectorAll('aside .soon').forEach(x=>{if(/^Versão /.test(x.textContent))x.remove()});
+const sd=document.getElementById('side');if(sd){const d=document.createElement('div');d.className='soon';d.style.marginTop='14px';d.textContent='Versão 3B-5d';sd.appendChild(d)}
 
-window.__impSolicTeste={ler,validar,parseData,num,achaSienge};
-})();
-</script>
-<script>
-/* 3B-5c: botão "Importar solicitações" também dentro da tela Solicitações e pedidos */
-(function(){
- function poe(){
-  const v=document.getElementById('view'),h=v&&v.querySelector('h1');
-  if(!h||h.textContent.trim()!=='Solicitações e pedidos'||!me||me.perfil==='FUNCIONARIO')return;
-  const bar=v.querySelector('.bar');if(!bar||bar.querySelector('#imp_sol_btn'))return;
-  const b=document.createElement('button');b.id='imp_sol_btn';b.type='button';b.className='sec';b.textContent='Importar solicitações (Sienge)';
-  b.onclick=()=>{const m=document.querySelector('#menu [data-v="imp_solic"]');if(!m){toast('Botão de importação não encontrado no menu.');return}
-   m.click();const f=document.getElementById('sx_f');if(f)f.click()};
-  bar.appendChild(b)}
- new MutationObserver(poe).observe(document.getElementById('view'),{childList:true,subtree:true});
- poe();
-})();
+window.__impSolicTeste={ler,validar,parseData,num,achaSienge,abrir};
+})()}catch(e){window.__impSolicErro=e;console.error('Importação de solicitações não carregou:',e);
+ const av=()=>{const t=document.getElementById('toast');if(t){t.textContent='Importação de solicitações não carregou: '+e.message;t.classList.add('on')}};
+ if(document.readyState==='complete')av();else window.addEventListener('load',av)}
 </script>
 </body>
 </html>
