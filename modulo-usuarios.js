@@ -1,52 +1,270 @@
-/* MASTERS GESTÃO - Módulo 3B-8: Usuários (só o administrador MASTERS).
-   Antes de usar, rode no Supabase o SQL 07_usuarios. */
+/* MASTERS GESTÃO - Módulo Usuários (administração completa, só o administrador MASTERS).
+   Antes de usar, rode no Supabase o SQL 11_usuarios_admin (depois do 07 e do 10).
+   - lista com pesquisa e filtros; editar tudo; inativar/reativar; excluir com proteção (exclusão lógica);
+   - gerar senha provisória (a senha atual nunca aparece);
+   - para todos os usuários: respeita as permissões liberadas, troca de senha obrigatória e saída automática de quem foi inativado.
+   Todas as regras de segurança estão no banco (RLS e funções); esta tela só facilita o uso. */
 try{(function(){
-const PERFIS=[['ALMOXARIFE','Almoxarife'],['ENCARREGADO','Encarregado'],['FUNCIONARIO','Funcionário (só consulta)']];
-const rot=p=>p==='MASTERS'?'Administrador':(PERFIS.find(x=>x[0]===p)||[0,p])[1];
+const PERFIS=[['MASTERS','Administrador'],['ALMOXARIFE','Almoxarife'],['ENCARREGADO','Encarregado'],['FUNCIONARIO','Funcionário (só consulta)']];
+const rot=p=>(PERFIS.find(x=>x[0]===p)||[0,p||'—'])[1];
 const usu=l=>String(l||'').replace(/@masters\.local$/i,'');
+const dt=v=>v?new Date(v).toLocaleDateString('pt-BR'):'—';
+const dth=v=>v?new Date(v).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'}):'—';
+const sn=s=>String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+const sit=u=>u.excluido_em?'excluido':u.ativo?'ativo':u.inativado_em?'inativo':'aguardando';
+const padraoGravar=p=>p==='MASTERS'||p==='ALMOXARIFE'||p==='ENCARREGADO';
+const padraoAlmox=p=>p==='MASTERS'||p==='ALMOXARIFE';
+const VINC={auditoria:'registros de auditoria',solicitacoes:'solicitações',pedidos_compra:'pedidos de compra',recebimentos:'recebimentos de material',
+ estoque_movs:'movimentações de estoque (entradas, saídas e entregas)',ferramenta_movs:'retiradas e devoluções de ferramentas',itens_recipiente:'itens de malas e malões',
+ malas:'malas',maloes:'malões',materiais:'materiais cadastrados',ferramentas:'ferramentas cadastradas',funcionarios:'funcionários cadastrados',fornecedores:'fornecedores cadastrados',
+ categorias:'categorias cadastradas',disciplinas:'disciplinas cadastradas',obras:'obras cadastradas ou importadas',importacoes:'importações de planilhas',
+ previsao_historico:'histórico de previsões',feriados:'feriados cadastrados',calendario_conferencias:'conferências do calendário'};
+let L=[],O=[],UO=[];                       /* usuários, obras, vínculos usuário-obra */
+const S={q:'',perfil:'',sit:''};
+const obrasDe=id=>UO.filter(x=>x.usuario_id===id).map(x=>x.obra_id);
+const nomeObra=i=>{const o=O.find(z=>z.id===i);return o?o.nome:'(obra removida)'};
+const quem=id=>{const u=L.find(x=>x.id===id);return u?(u.nome||usu(u.login||u.login_original)):'—'};
+const nomeU=u=>u.nome||usu(u.excluido_em?u.login_original:u.login)||'(sem nome)';
+const adm=()=>!!me&&(me.perfil_real||me.perfil)==='MASTERS';
+/* abre uma janela depois que a atual terminou de fechar (a janela do sistema é uma só) */
+const depois=f=>setTimeout(f,0);
 
+/* ---------- estilo da lista (tabela no computador, cartões no celular) ---------- */
+(function(){if(document.getElementById('usu_css'))return;const s=document.createElement('style');s.id='usu_css';
+ s.textContent='.usu-t td small{display:block;color:var(--mute)}.usu-t th,.usu-t td{padding:8px 8px}.usu-ac{min-width:150px}.usu-ac .mini{margin:2px 6px 2px 0}.usu-fil{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}.usu-fil>*{flex:1 1 200px;min-width:0}'+
+ '.usu-det summary{cursor:pointer;font-weight:600;min-height:32px}.usu-box{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:12px}.usu-box h3{margin:0 0 4px;font-size:15px}'+
+ '.usu-pw{font:700 26px/1.3 ui-monospace,Menlo,Consolas,monospace;letter-spacing:2px;text-align:center;background:var(--soft);border-radius:10px;padding:14px 8px;margin:12px 0;user-select:all;word-break:break-all}'+
+ '.usu-ck{display:flex;gap:10px;align-items:flex-start;padding:8px 0}.usu-ck input{width:24px;min-width:24px;min-height:24px;margin:2px 0 0}.usu-h li{margin:6px 0}'+
+ '@media (max-width:1100px){.usu-t{min-width:0!important}.usu-t thead{display:none}.usu-t,.usu-t tbody,.usu-t tr,.usu-t td{display:block;width:100%}'+
+ '.usu-t tr{border:1px solid var(--line);border-radius:12px;margin:0 0 12px;padding:6px 10px;background:var(--surf)}.usu-t td{border:0;padding:5px 0}'+
+ '.usu-t td[data-l]::before{content:attr(data-l)": ";font-weight:600;color:var(--mute)}.usu-t td.usu-nm{font-size:17px}'+
+ '.usu-ac .mini{min-height:44px;margin:6px 8px 4px 0;padding:0 16px}.usu-card-w{padding:8px!important;border:0!important;background:none!important}}';
+ document.head.appendChild(s)}());
+
+/* ---------- dados ---------- */
+async function carregar(){
+ const[a,b,c]=await Promise.all([sb.from('perfis').select('*'),sb.from('usuario_obras').select('*'),sb.from('obras').select('id,nome').order('nome')]);
+ const e=a.error||b.error||c.error;if(e)throw e;
+ L=a.data||[];UO=b.data||[];O=c.data||[]}
+
+/* ---------- tela principal ---------- */
 async function telaUsuarios(){cur='usuarios';mark();const v=$('#view');
  v.innerHTML='<h1>Usuários</h1><p class="sub">Carregando…</p>';
- const[a,b,c]=await Promise.all([sb.from('perfis').select('*'),sb.from('usuario_obras').select('*'),sb.from('obras').select('id,nome').order('nome')]);
- const e=a.error||b.error||c.error;if(e){v.innerHTML='<h1>Usuários</h1><div class="err">'+esc(msg(e))+'</div>';return}
- const O=c.data||[],obrasDe=id=>(b.data||[]).filter(x=>x.usuario_id===id).map(x=>x.obra_id);
- const L=(a.data||[]).slice().sort((x,y)=>(x.ativo-y.ativo)||String(x.nome||x.login).localeCompare(String(y.nome||y.login)));
- const linhas=L.map(u=>{const ob=u.perfil==='MASTERS'?'Todas':(obrasDe(u.id).map(i=>{const o=O.find(z=>z.id===i);return o?esc(o.nome):''}).filter(Boolean).join(', ')||'—');
-  return `<tr><td><b>${esc(u.nome||'(sem nome)')}</b></td><td>${esc(usu(u.login))}</td><td>${esc(rot(u.perfil))}</td><td>${ob}</td><td>${u.ativo?'<span class="chip">Liberado</span>':'<span class="chip red">Aguardando liberação</span>'}</td><td><button class="mini" data-u="${u.id}">Editar</button></td></tr>`}).join('');
- v.innerHTML=`<h1>Usuários</h1><p class="sub">${L.length} usuário(s). Quem ainda não foi liberado não consegue entrar no sistema.</p>
- <div class="card"><b>Como criar um novo usuário</b>
+ try{await carregar()}catch(e){v.innerHTML='<h1>Usuários</h1><div class="err">'+esc(msg(e))+'<br>Se aparecer erro de coluna ou função, rode o SQL 11 no Supabase.</div>';return}
+ v.innerHTML=`<h1>Usuários</h1><p class="sub" id="usu_n"></p>
+ <div class="usu-fil"><input id="usu_q" type="search" placeholder="Pesquisar por nome ou login" aria-label="Pesquisar por nome ou login" value="${esc(S.q)}">
+  <select id="usu_p" aria-label="Filtrar por perfil"><option value="">Todos os perfis</option>${PERFIS.map(p=>`<option value="${p[0]}" ${S.perfil===p[0]?'selected':''}>${p[1]}</option>`).join('')}</select>
+  <select id="usu_s" aria-label="Filtrar por situação"><option value="">Todas as situações (menos excluídos)</option>${[['ativo','Ativo'],['inativo','Inativo'],['aguardando','Aguardando liberação'],['excluido','Excluído']].map(p=>`<option value="${p[0]}" ${S.sit===p[0]?'selected':''}>${p[1]}</option>`).join('')}</select></div>
+ <div class="card wrap usu-card-w" id="usu_l"></div>
+ <details class="card usu-det" style="margin-top:12px"><summary>Como criar um novo usuário</summary>
  <ol class="steps"><li>No Supabase: <b>Authentication → Users → Add user → Create new user</b>.</li>
  <li>No e-mail, escreva <b>nomedousuario@masters.local</b> (a pessoa entrará só com <b>nomedousuario</b>). Crie uma senha e marque <b>Auto Confirm User</b>.</li>
- <li>Volte aqui, atualize a página, clique em <b>Editar</b> no novo usuário, escolha o perfil e as obras e marque <b>Acesso liberado</b>.</li></ol></div>
- <div class="card wrap" style="margin-top:12px">${L.length?`<table><thead><tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Obras</th><th>Situação</th><th></th></tr></thead><tbody>${linhas}</tbody></table>`:'<p class="empty">Nenhum usuário.</p>'}</div>`;
- v.querySelectorAll('[data-u]').forEach(btn=>btn.onclick=()=>editar(L.find(u=>u.id===btn.dataset.u),O,obrasDe(btn.dataset.u)))}
+ <li>Volte aqui, atualize a página, clique em <b>Editar</b> no novo usuário, escolha o perfil e as obras e deixe a situação em <b>Ativo</b>.</li></ol></details>`;
+ $('#usu_q').oninput=e=>{S.q=e.target.value;lista()};$('#usu_p').onchange=e=>{S.perfil=e.target.value;lista()};$('#usu_s').onchange=e=>{S.sit=e.target.value;lista()};
+ lista()}
 
-function editar(u,O,mine){const adm=u.perfil==='MASTERS';
- modal('Usuário: '+esc(usu(u.login)),
- `<label class="fl" for="u_n">Nome completo <b class="rq">*</b></label><input id="u_n" value="${esc(u.nome||'')}">
- ${adm?'<p class="hint">O administrador MASTERS tem acesso a todas as obras e não pode ser bloqueado nem ter o perfil alterado.</p>':
- `<label class="fl" for="u_p">Perfil <b class="rq">*</b></label><select id="u_p">${PERFIS.map(p=>`<option value="${p[0]}" ${p[0]===u.perfil?'selected':''}>${p[1]}</option>`).join('')}</select>
- <div class="hint"><b>Almoxarife:</b> confirma recebimentos, dá saída de material e cadastra. <b>Encarregado:</b> cadastra e registra solicitações e pedidos. <b>Funcionário:</b> só consulta.</div>
- <label class="fl">Obras que este usuário pode acessar</label>
- ${O.length?O.map(o=>`<label style="display:block;padding:6px 0"><input type="checkbox" class="u_o" value="${o.id}" ${mine.includes(o.id)?'checked':''} style="width:22px;min-height:22px;vertical-align:middle"> ${esc(o.nome)}</label>`).join(''):'<div class="hint" style="color:var(--red)">Cadastre antes as obras.</div>'}
- <label style="display:block;padding:12px 0"><input type="checkbox" id="u_a" ${u.ativo?'checked':''} style="width:22px;min-height:22px;vertical-align:middle"> <b>Acesso liberado</b></label>
- <div class="hint">Desmarque para bloquear a entrada deste usuário.</div>`}`,
- 'Salvar',async()=>{
-  const nome=$('#u_n').value.trim();if(!nome)return 'Informe o nome do usuário.';
-  let perfil=u.perfil,ativo=true,obras=[];
-  if(!adm){perfil=$('#u_p').value;ativo=$('#u_a').checked;obras=[...document.querySelectorAll('.u_o:checked')].map(x=>x.value);
-   if(ativo&&!obras.length)return 'Marque ao menos uma obra para liberar o acesso.'}
-  if(!confirm('Salvar as alterações deste usuário?'))return 'Nada foi alterado.';
-  const{error}=await sb.rpc('salvar_usuario',{p_id:u.id,p_nome:nome,p_perfil:perfil,p_ativo:ativo,p_obras:obras});
-  if(error)return msg(error);
-  toast('Usuário salvo.');telaUsuarios()})}
+function filtrados(){const q=sn(S.q.trim());
+ return L.filter(u=>{const s=sit(u);if(S.sit?s!==S.sit:s==='excluido')return false;if(S.perfil&&u.perfil!==S.perfil)return false;
+  if(q&&!sn([u.nome,usu(u.login),usu(u.login_original),u.matricula,u.cargo].join(' ')).includes(q))return false;return true})
+ .sort((x,y)=>{const o={ativo:0,aguardando:1,inativo:2,excluido:3};return (o[sit(x)]-o[sit(y)])||nomeU(x).localeCompare(nomeU(y),'pt-BR')})}
 
+function lista(){const F=filtrados(),el=$('#usu_l');if(!el)return;
+ const ativos=L.filter(u=>sit(u)==='ativo').length;
+ $('#usu_n').textContent=`${F.length} de ${L.filter(u=>sit(u)!=='excluido').length} usuário(s) na lista · ${ativos} ativo(s). Usuário inativo não consegue entrar nem trabalhar no sistema.`;
+ if(!F.length){el.innerHTML='<p class="empty">Nenhum usuário encontrado com esse filtro.</p>';return}
+ el.innerHTML=`<table class="usu-t"><thead><tr><th>Nome</th><th>Login</th><th>Perfil</th><th>Obras vinculadas</th><th>Situação</th><th>Cadastro</th><th>Ações</th></tr></thead><tbody>${F.map(linha).join('')}</tbody></table>`;
+ el.querySelectorAll('[data-usu-a]').forEach(b=>b.onclick=()=>{const u=L.find(x=>x.id===b.dataset.usuI);if(!u)return;({ed:editar,st:alternar,ex:excluir,pw:senha,hi:historico,rs:alternar})[b.dataset.usuA](u)})}
+
+function linha(u){const s=sit(u),eu=u.id===me.id;
+ const obs=u.perfil==='MASTERS'?'Todas':(()=>{const n=obrasDe(u.id).map(nomeObra);return !n.length?'—':n.length>3?n.slice(0,3).join(', ')+' +'+(n.length-3):n.join(', ')})();
+ const ch={ativo:'<span class="chip blue">Ativo</span>',inativo:'<span class="chip red">Inativo</span>',aguardando:'<span class="chip">Aguardando liberação</span>',excluido:'<span class="chip red">Excluído</span>'}[s];
+ const ex=[];if(u.trocar_senha)ex.push('<span class="chip">Senha provisória</span>');if(eu)ex.push('<span class="chip">Você</span>');
+ const sub=[u.cargo,u.matricula?'Matrícula '+u.matricula:''].filter(Boolean).map(esc).join(' · ');
+ const perm=(u.perm_gravar!=null||u.perm_almoxarifado!=null)&&u.perfil!=='MASTERS'?'<small>Permissões personalizadas</small>':'';
+ const mot=s==='inativo'?`<small>desde ${dt(u.inativado_em)}${u.motivo_inativacao?' — '+esc(u.motivo_inativacao):''}</small>`:'';
+ const b=(a,t)=>`<button class="mini" type="button" data-usu-a="${a}" data-usu-i="${u.id}">${t}</button>`;
+ let ac;
+ if(s==='excluido')ac=b('rs','Restaurar')+b('hi','Histórico');
+ else ac=b('ed','Editar')+(eu?'':(s==='ativo'?b('st','Inativar'):b('st',s==='inativo'?'Reativar':'Liberar acesso'))+b('ex','Excluir'));
+ return `<tr><td class="usu-nm"><b>${esc(nomeU(u))}</b>${sub?'<small>'+sub+'</small>':''}</td><td data-l="Login">${esc(usu(s==='excluido'?u.login_original:u.login))}</td><td data-l="Perfil">${esc(rot(u.perfil))}${perm}</td>
+ <td data-l="Obras">${esc(obs)}</td><td data-l="Situação">${ch} ${ex.join(' ')}${mot}</td><td data-l="Cadastro">${dt(u.criado_em)}</td><td class="usu-ac">${ac}</td></tr>`}
+
+/* ---------- editar ---------- */
+const NP={'':'Padrão do perfil',sim:'Permitir',nao:'Não permitir'};
+function editar(u){
+ const eu=u.id===me.id,loginEd=/@masters\.local$/i.test(u.login||''),mine=obrasDe(u.id),s0=sit(u);
+ const pv=x=>x==null?'':x?'sim':'nao';
+ const permSel=(id,lab,val)=>`<label class="fl" for="${id}">${lab}</label><select id="${id}"><option value="" ${val===''?'selected':''}>Padrão do perfil</option><option value="sim" ${val==='sim'?'selected':''}>Permitir</option><option value="nao" ${val==='nao'?'selected':''}>Não permitir</option></select><div class="hint" id="${id}_h"></div>`;
+ const html=`<div class="hint">Os campos com <b class="rq">*</b> são obrigatórios. A senha atual nunca é mostrada.</div>
+ <label class="fl" for="u_n">Nome completo <b class="rq">*</b></label><input id="u_n" value="${esc(u.nome||'')}" autocomplete="off">
+ <label class="fl" for="u_l">Login (usado para entrar) <b class="rq">*</b></label><input id="u_l" value="${esc(usu(u.login))}" ${loginEd?'':'disabled'} autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off">
+ <div class="hint">${loginEd?'De 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado. Se mudar, avise a pessoa. A senha continua a mesma.':'Esta conta entra com e-mail próprio, e o login não muda por aqui.'}</div>
+ <label class="fl" for="u_m">Matrícula</label><input id="u_m" value="${esc(u.matricula||'')}" autocomplete="off">
+ <label class="fl" for="u_c">Função / cargo</label><input id="u_c" value="${esc(u.cargo||'')}" autocomplete="off">
+ <label class="fl" for="u_p2">Perfil de acesso <b class="rq">*</b></label><select id="u_p2" ${eu?'disabled':''}>${PERFIS.map(p=>`<option value="${p[0]}" ${p[0]===u.perfil?'selected':''}>${p[1]}</option>`).join('')}</select>
+ <div class="hint" id="u_ph"></div>
+ <div id="u_ob"><label class="fl">Obras que este usuário pode acessar</label>${O.length?O.map(o=>`<label class="usu-ck"><input type="checkbox" class="u_o" value="${o.id}" ${mine.includes(o.id)?'checked':''}><span>${esc(o.nome)}</span></label>`).join(''):'<div class="hint redt">Cadastre antes as obras.</div>'}</div>
+ <div id="u_ad" class="hint hide">O administrador tem acesso a todas as obras e a todas as funções, inclusive gerenciar usuários.</div>
+ <div id="u_pm" class="usu-box"><h3>Permissões específicas</h3><div class="hint">Use só quando esta pessoa precisar de algo diferente do perfil. Valem no banco de dados, não só na tela.</div>
+  ${permSel('u_pg','Cadastrar e registrar (solicitações, pedidos, materiais…)',pv(u.perm_gravar))}
+  ${permSel('u_pa','Almoxarifado (confirmar recebimentos e dar saída de material)',pv(u.perm_almoxarifado))}</div>
+ <label class="fl" for="u_s">Situação</label><select id="u_s" ${eu?'disabled':''}><option value="ativo" ${s0==='ativo'?'selected':''}>Ativo</option><option value="inativo" ${s0==='inativo'?'selected':''}>Inativo (bloqueado, sem apagar nada)</option>${s0==='aguardando'?'<option value="aguardando" selected>Aguardando liberação</option>':''}</select>
+ ${eu?'<div class="hint">Você não pode alterar o seu próprio perfil nem a sua situação. Para trocar a sua senha, use “Minha senha”.</div>':''}
+ <div id="u_mo" class="hide"><label class="fl" for="u_mt">Motivo da inativação (opcional)</label><input id="u_mt" maxlength="200" placeholder="Ex.: férias, desligamento"></div>
+ <div class="usu-box"><h3>Mais opções</h3>${eu?'':'<button type="button" class="mini" id="u_pw" style="min-height:44px">Gerar senha provisória</button> '}<button type="button" class="mini" id="u_hi" style="min-height:44px">Ver histórico deste usuário</button></div>`;
+ modal('Editar usuário',html,'Revisar e salvar',()=>{
+  const nome=$('#u_n').value.trim();if(!nome)return 'Informe o nome completo.';
+  const login=$('#u_l').value.trim().toLowerCase();
+  if(loginEd&&!/^[a-z0-9][a-z0-9._-]{2,29}$/.test(login))return 'Login inválido. Use de 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado, sem espaços.';
+  const perfil=eu?u.perfil:$('#u_p2').value,s1=eu?s0:$('#u_s').value;
+  const obras=[...document.querySelectorAll('.u_o:checked')].map(x=>x.value);
+  if(perfil!=='MASTERS'&&s1==='ativo'&&!obras.length)return 'Marque ao menos uma obra para este usuário ficar ativo.';
+  const pg=$('#u_pg').value,pa=$('#u_pa').value,val=x=>x===''?null:x==='sim';
+  const d={},res=[];   /* d: o que mudou (vai para o banco); res: texto do resumo */
+  const nv=(k,rotulo,antes,novo)=>{if((antes||'')!==(novo||'')){d[k]=novo||null;res.push([rotulo,antes||'—',novo||'—'])}};
+  nv('nome','Nome',u.nome,nome);if(loginEd)nv('login','Login',usu(u.login),login);
+  nv('matricula','Matrícula',u.matricula,$('#u_m').value.trim());nv('cargo','Função / cargo',u.cargo,$('#u_c').value.trim());
+  if(perfil!==u.perfil){d.perfil=perfil;res.push(['Perfil de acesso',rot(u.perfil),rot(perfil)])}
+  if(perfil!=='MASTERS'){
+   if(val(pg)!==(u.perm_gravar==null?null:u.perm_gravar)){d.perm_gravar=val(pg);res.push(['Cadastrar e registrar',NP[pv(u.perm_gravar)],NP[pg]])}
+   if(val(pa)!==(u.perm_almoxarifado==null?null:u.perm_almoxarifado)){d.perm_almoxarifado=val(pa);res.push(['Almoxarifado',NP[pv(u.perm_almoxarifado)],NP[pa]])}
+   const add=obras.filter(x=>!mine.includes(x)),del=mine.filter(x=>!obras.includes(x));
+   if(add.length||del.length){d.obras=obras;if(add.length)res.push(['Obras: acesso liberado','—',add.map(nomeObra).join(', ')]);if(del.length)res.push(['Obras: acesso removido',del.map(nomeObra).join(', '),'—'])}}
+  const mudouSit=s1!==s0&&s1!=='aguardando';
+  if(mudouSit)res.push(['Situação',{ativo:'Ativo',inativo:'Inativo',aguardando:'Aguardando liberação'}[s0],{ativo:'Ativo',inativo:'Inativo'}[s1]]);
+  if(!res.length)return 'Nada foi alterado.';
+  const motivo=($('#u_mt').value||'').trim();
+  depois(()=>confirmar(u,d,res,mudouSit?s1==='ativo':null,motivo,perfil==='MASTERS'&&u.perfil!=='MASTERS'));
+ });
+ const ref=()=>{const p=eu?u.perfil:$('#u_p2').value,a=p==='MASTERS';
+  $('#u_ob').classList.toggle('hide',a);$('#u_pm').classList.toggle('hide',a);$('#u_ad').classList.toggle('hide',!a);
+  $('#u_pg_h').textContent='Padrão deste perfil: '+(padraoGravar(p)?'permite.':'não permite.');$('#u_pa_h').textContent='Padrão deste perfil: '+(padraoAlmox(p)?'permite.':'não permite.');
+  $('#u_ph').innerHTML={MASTERS:'<b>Administrador:</b> acesso total, inclusive usuários. Dê só a quem for responsável pelo sistema.',ALMOXARIFE:'<b>Almoxarife:</b> confirma recebimentos, dá saída de material e cadastra.',ENCARREGADO:'<b>Encarregado:</b> cadastra e registra solicitações e pedidos.',FUNCIONARIO:'<b>Funcionário:</b> só consulta.'}[p];
+  $('#u_mo').classList.toggle('hide',eu||$('#u_s').value!=='inativo'||s0==='inativo')};
+ $('#u_p2').onchange=ref;$('#u_s').onchange=ref;ref();
+ if($('#u_pw'))$('#u_pw').onclick=()=>{$('#dlg').close();depois(()=>senha(u))};
+ $('#u_hi').onclick=()=>{$('#dlg').close();depois(()=>historico(u))}}
+
+/* confirmação do resumo das alterações; depois grava */
+function confirmar(u,d,res,mudouAtivo,motivo,viraAdm){
+ const lista=res.map(r=>`<li><b>${esc(r[0])}:</b> ${esc(r[1])} → ${esc(r[2])}</li>`).join('');
+ modal('Confirmar alterações de '+esc(nomeU(u)),`<p>Estas alterações serão gravadas e registradas na auditoria:</p><ul class="usu-h">${lista}</ul>
+ ${viraAdm?'<div class="usu-box"><b class="redt">Atenção:</b> o Administrador pode tudo no sistema, inclusive criar, bloquear e excluir outros usuários.<label class="usu-ck"><input type="checkbox" id="u_ok"><span>Entendi e quero tornar esta pessoa administradora.</span></label></div>':''}
+ ${mudouAtivo===false?'<p class="hint">Ao inativar, a pessoa é desconectada e não consegue mais entrar. O histórico dela continua guardado.</p>':''}`,'Confirmar e salvar',async()=>{
+  if(viraAdm&&!$('#u_ok').checked)return 'Marque a caixa para confirmar.';
+  let gravou=false;
+  try{
+   if(Object.keys(d).length){const{error}=await sb.rpc('atualizar_usuario',{p_id:u.id,p_dados:d});if(error)return msg(error);gravou=true}
+   if(mudouAtivo!==null){const{error}=await sb.rpc('situacao_usuario',{p_id:u.id,p_ativo:mudouAtivo,p_motivo:motivo||null});
+    if(error)return (gravou?'Os dados foram salvos, mas a situação não mudou: ':'')+msg(error)}
+  }catch(x){return msg(x)}
+  toast('Usuário atualizado.');depois(telaUsuarios)})}
+
+/* ---------- inativar / reativar / restaurar / liberar ---------- */
+function alternar(u){const s=sit(u),eu=u.id===me.id;if(eu)return;
+ if(s==='ativo'){
+  modal('Inativar '+esc(nomeU(u))+'?',`<p>Esta pessoa <b>não poderá mais entrar nem trabalhar</b> no sistema, e será desconectada agora.</p>
+  <ul class="usu-h"><li>Tudo o que ela já registrou (solicitações, retiradas, entregas, cadastros) <b>continua guardado</b>.</li><li>Você pode <b>reativar</b> quando quiser.</li></ul>
+  <label class="fl" for="u_mt">Motivo (opcional)</label><input id="u_mt" maxlength="200" placeholder="Ex.: férias, desligamento">`,'Inativar',async()=>{
+   const{error}=await sb.rpc('situacao_usuario',{p_id:u.id,p_ativo:false,p_motivo:($('#u_mt').value||'').trim()||null});if(error)return msg(error);
+   toast('Usuário inativado.');depois(telaUsuarios)})}
+ else{const rest=s==='excluido';
+  modal((rest?'Restaurar ':s==='inativo'?'Reativar ':'Liberar acesso de ')+esc(nomeU(u))+'?',
+   `<p>${rest?'O usuário volta para a lista com o login que tinha antes (se ninguém tiver usado esse login nesse tempo) e fica ativo.':'A pessoa poderá entrar e trabalhar de novo, com as mesmas obras e permissões.'}</p>${u.trocar_senha?'<p class="hint">Ela ainda precisa trocar a senha provisória no primeiro acesso.</p>':''}`,
+   rest?'Restaurar':s==='inativo'?'Reativar':'Liberar',async()=>{
+   const{error}=await sb.rpc('situacao_usuario',{p_id:u.id,p_ativo:true,p_motivo:null});if(error)return msg(error);
+   toast(rest?'Usuário restaurado.':'Acesso liberado.');depois(telaUsuarios)})}}
+
+/* ---------- excluir (exclusão lógica, com os vínculos à vista) ---------- */
+async function excluir(u){
+ modal('Excluir '+esc(nomeU(u))+'?','<p class="sub">Conferindo o que está ligado a este usuário…</p>',null);
+ let v;try{const r=await sb.rpc('vinculos_usuario',{p_id:u.id});if(r.error)throw r.error;v=r.data||[]}catch(e){$('#dlg').close();toast(msg(e));return}
+ const tot=v.reduce((a,x)=>a+Number(x.qtd||0),0);
+ const lis=v.map(x=>{const lab=x.tabela==='itens_recipiente'&&x.coluna==='retirado_por'?'itens retirados de malas e malões':(VINC[x.tabela]||x.tabela);return `<li><b>${x.qtd}</b> ${esc(lab)}</li>`}).join('');
+ $('#dlg').close();
+ depois(()=>modal('Excluir '+esc(nomeU(u))+'?',`${tot?`<p>Este usuário tem <b>${tot} registro(s) vinculado(s)</b>:</p><ul class="usu-h">${lis}</ul>`:'<p>Este usuário não tem registros vinculados.</p>'}
+  <div class="usu-box"><h3>O que acontece</h3><ul class="usu-h"><li>O usuário <b>some da lista</b>, perde o acesso na hora e o login fica livre para outra pessoa.</li>
+  <li><b>Nada é apagado</b> e nenhum registro é desvinculado: o nome dele continua nas solicitações, retiradas, entregas e na auditoria.</li>
+  <li>Dá para <b>restaurar</b> depois, em Situação → Excluído.</li></ul></div>
+  <p class="hint">Se a pessoa só vai ficar afastada, prefira <b>Inativar</b>.</p>
+  <label class="usu-ck"><input type="checkbox" id="u_ok"><span>Entendi e quero excluir <b>${esc(nomeU(u))}</b>.</span></label>`,'Excluir usuário',async()=>{
+   if(!$('#u_ok').checked)return 'Marque a caixa para confirmar a exclusão.';
+   const{error}=await sb.rpc('excluir_usuario',{p_id:u.id});if(error)return msg(error);
+   toast('Usuário excluído. Os registros foram preservados.');depois(telaUsuarios)}))}
+
+/* ---------- senha provisória ---------- */
+function senha(u){
+ modal('Gerar senha provisória para '+esc(nomeU(u)),`<p>Será criada uma senha provisória de 10 caracteres.</p>
+  <ul class="usu-h"><li>A senha atual <b>deixa de funcionar agora</b> e a pessoa é desconectada. Ela nunca é exibida.</li><li>No primeiro acesso, a pessoa é obrigada a escolher uma senha nova.</li><li>A senha provisória aparece <b>uma única vez</b>, na próxima tela.</li></ul>`,'Gerar senha provisória',async()=>{
+  const{data,error}=await sb.rpc('redefinir_senha_usuario',{p_id:u.id});if(error)return msg(error);
+  const pw=data&&data.senha;if(!pw)return 'Não foi possível gerar a senha. Tente de novo.';
+  depois(()=>{modal('Senha provisória de '+esc(nomeU(u)),`<p>Entregue à pessoa <b>agora</b>, em particular. Esta senha não será mostrada outra vez.</p>
+   <div class="hint">Login: <b>${esc(usu(u.login))}</b></div><div class="usu-pw" id="u_pwv" aria-label="Senha provisória">${esc(pw)}</div>
+   <div class="acts" style="justify-content:center"><button class="btn" type="button" id="u_cp">Copiar senha</button></div>
+   <p class="hint">Ao entrar com ela, o sistema pede que a pessoa crie uma senha nova.</p>`,null);
+   $('#u_cp').onclick=async()=>{try{await navigator.clipboard.writeText(pw);toast('Senha copiada.')}catch(x){const r=document.createRange();r.selectNodeContents($('#u_pwv'));const s=getSelection();s.removeAllRanges();s.addRange(r);toast('Selecionada. Copie com o menu do aparelho.')}};
+   telaUsuarios()})})}
+
+/* ---------- histórico de um usuário (auditoria) ---------- */
+const OPS={USUARIO_EDITADO:'Dados alterados',USUARIO_INATIVADO:'Inativado',USUARIO_REATIVADO:'Reativado',USUARIO_RESTAURADO:'Restaurado',USUARIO_EXCLUIDO:'Excluído (exclusão lógica)',USUARIO_SENHA_REDEFINIDA:'Senha provisória gerada',USUARIO_SENHA_TROCADA:'Senha trocada pelo próprio usuário'};
+const CAMPOS={nome:'Nome',login:'Login',matricula:'Matrícula',cargo:'Função',perfil:'Perfil',perm_gravar:'Cadastrar e registrar',perm_almoxarifado:'Almoxarifado',ativo:'Ativo',motivo:'Motivo'};
+function detalhe(r){const a=r.antes||{},b=r.depois||{},out=[];
+ Object.keys(b).forEach(k=>{if(k[0]==='_'||k==='exclusao'||k==='trocar_senha')return;
+  if(k==='obras_acrescentadas')out.push('Obras liberadas: '+esc((b[k]||[]).map(nomeObra).join(', ')));
+  else if(k==='registros_vinculados')out.push(esc(b[k]||0)+' registro(s) vinculado(s) preservado(s)');
+  else{const f=x=>x===true?'sim':x===false?'não':x==null?'—':k==='login'?usu(x):k==='perfil'?rot(x):x;out.push(esc(CAMPOS[k]||k)+': '+esc(f(a[k]))+' → '+esc(f(b[k])))}});
+ if(a.obras_removidas)out.push('Obras removidas: '+esc(a.obras_removidas.map(nomeObra).join(', ')));
+ return out.join('<br>')}
+async function historico(u){
+ modal('Histórico de '+esc(nomeU(u)),'<p class="sub">Carregando…</p>',null);
+ const{data,error}=await sb.from('auditoria').select('*').eq('tabela','usuarios').eq('registro_id',u.id).order('em',{ascending:false}).limit(60);
+ const box=$('#dlg>div');if(!box)return;
+ if(error){box.innerHTML='<div class="err">'+esc(msg(error))+'</div>';return}
+ box.innerHTML=(data||[]).length?(data||[]).map(r=>`<div class="mv"><b>${esc(OPS[r.operacao]||r.operacao)}</b> — ${esc(dth(r.em))}<br><span class="hint">Por: ${esc(r.usuario_id?quem(r.usuario_id):'sistema')}</span><div>${detalhe(r)}</div></div>`).join(''):'<p class="empty">Ainda não há alterações registradas para este usuário.</p>'}
+
+/* ---------- menu (só o administrador) ---------- */
 function poeMenu(){const m=$('#menu');if(!m||m.querySelector('[data-v="usuarios"]'))return;
  [...m.querySelectorAll('.soon')].filter(x=>/^Usuários/i.test(x.textContent)).forEach(x=>x.remove());
  const h=[...m.querySelectorAll('h4')].find(x=>x.textContent==='Em breve');if(h&&!(h.nextElementSibling&&h.nextElementSibling.classList.contains('soon')))h.remove();
- if(!me||me.perfil!=='MASTERS')return;
+ if(!adm())return;
  m.insertAdjacentHTML('beforeend','<h4>Administração</h4><button class="nav" data-v="usuarios">Usuários</button>');
  const n=m.querySelector('[data-v="usuarios"]');n.onclick=telaUsuarios;n.classList.toggle('on',cur==='usuarios')}
-const _menu8=menu;menu=function(){_menu8();poeMenu()};
+
+/* ---------- vale para TODOS os usuários: permissões, troca de senha obrigatória, saída automática ---------- */
+const assin=u=>[u.perfil,u.perm_gravar,u.perm_almoxarifado,u.ativo,u.excluido_em,u.trocar_senha].join('|');
+/* o banco decide de verdade; aqui a tela só mostra ou esconde botões conforme perfil + permissões específicas */
+function aplicaPerfil(){if(!me||me.__ui)return;me.__ui=1;me.perfil_real=me.perfil;me.__sig=assin(me);
+ if(me.perfil==='MASTERS')return;
+ const g=me.perm_gravar!=null?me.perm_gravar:padraoGravar(me.perfil),a=me.perm_almoxarifado!=null?me.perm_almoxarifado:padraoAlmox(me.perfil);
+ me.perfil=a?'ALMOXARIFE':g?'ENCARREGADO':'FUNCIONARIO'}
+const _msgU=msg;msg=function(e){const t=((e&&e.message)||'')+' '+((e&&e.code)||'');
+ if(/banned/i.test(t))return 'Seu acesso está inativo. Procure o administrador do sistema.';
+ return _msgU(e)};
+
+function sair(texto){(async()=>{try{await sb.auth.signOut()}catch(x){}me=null;try{$('#dlg').close()}catch(x){}tela('login');
+ if(texto){const e=$('#le');if(e){e.textContent=texto;e.classList.remove('hide')}}})()}
+
+function forcaTroca(){if(!me||!me.trocar_senha||window.__usuForca)return;window.__usuForca=1;
+ const d=$('#dlg');d.addEventListener('cancel',e=>{if(window.__usuForca)e.preventDefault()});
+ modal('Crie a sua senha',`<p>Você entrou com uma <b>senha provisória</b>. Por segurança, escolha agora uma senha só sua.</p>${pwf('n1','Nova senha')}${pwf('n2','Repita a nova senha')}<div class="hint">Use pelo menos 6 caracteres e diferente da provisória.</div>`,'Salvar nova senha',async()=>{
+  const a=$('#n1').value,b=$('#n2').value;if(a.length<6)return 'A senha precisa ter pelo menos 6 caracteres.';if(a!==b)return 'As duas senhas não são iguais.';
+  const r1=await sb.auth.updateUser({password:a});if(r1.error)return msg(r1.error);
+  const r2=await sb.rpc('confirmar_troca_senha');if(r2.error)return msg(r2.error);
+  window.__usuForca=0;toast('Senha criada. Bem-vindo(a)!');depois(()=>{entrar()})});
+ const c=$('#mc');if(c){c.textContent='Sair';c.onclick=()=>{window.__usuForca=0;sair()}}}
+
+let vig=null;
+async function vigia(){if(!me||!sb||document.hidden)return;
+ try{const{data,error}=await sb.from('perfis').select('*').eq('id',me.id).maybeSingle();
+  if(error&&/jwt|auth|token|banned|session/i.test(error.message||'')){sair('Sua sessão terminou. Entre novamente.');return}
+  if(error)return;                          /* sem internet: não derruba ninguém */
+  if(!data||!data.ativo||data.excluido_em){sair('Seu acesso foi inativado pelo administrador.');return}
+  if(assin(data)!==me.__sig){toast('Suas permissões foram atualizadas.');await entrar()}}catch(x){}}
+function liga(){if(vig)return;vig=setInterval(vigia,45000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)vigia()})}
+
+const _menuU=menu;menu=function(){aplicaPerfil();_menuU();poeMenu();
+ try{$('#who').innerHTML=esc(me.nome||me.login)+'<br>'+esc(me.perfil_real||me.perfil)}catch(x){}
+ liga();if(me&&me.trocar_senha)depois(forcaTroca)};
 if($('#menu')&&$('#menu').children.length)poeMenu();
+window.__usuTeste={sit,filtrados,aplicaPerfil,vigia,get L(){return L}};
 }())}catch(e){window.__usuErro=e;try{toast('Usuários não carregou: '+e.message)}catch(x){}}
