@@ -81,7 +81,7 @@ async function ler(file){const n=file.name.toLowerCase();let planilhas;
 async function lerTudo(t,c,f){let a=[],i=0;for(;;){let q=sb.from(t).select(c).order('id').range(i,i+999);if(f)q=f(q);const{data,error}=await q;if(error)throw error;a=a.concat(data||[]);if(!data||data.length<1000)break;i+=1000}return a}
 async function contexto(){
  const[ob,so,pc,fo,fe]=await Promise.all([lerTudo('obras','id,nome,codigo'),lerTudo('solicitacoes','id,numero_sienge,obra_id,status,data_aprovacao'),
-  lerTudo('pedidos_compra','id,numero_pedido,solicitacao_id'),lerTudo('fornecedores','id,nome,cnpj'),lerTudo('feriados','id,data,obra_id')]);
+lerTudo('feriados','id,data,obra_id,nao_util,ativo')
  const ids=so.map(s=>s.id),itens=[];
  for(let i=0;i<ids.length;i+=200){const d=await lerTudo('solicitacao_itens','id,solicitacao_id,quantidade,materiais(codigo,descricao,unidade)',q=>q.in('solicitacao_id',ids.slice(i,i+200)));itens.push(...d)}
  const pi=await lerTudo('pedido_itens','id,solicitacao_item_id,quantidade');
@@ -90,7 +90,7 @@ async function contexto(){
 
 function previsao(dataISO,obraId,fer){let d=new Date(dataISO+'T00:00:00Z'),c=0;
  while(c<5){d=new Date(d.getTime()+86400000);const w=d.getUTCDay(),s=d.toISOString().slice(0,10);
-  if(w!==0&&w!==6&&!fer.some(f=>f.data===s&&(!f.obra_id||f.obra_id===obraId)))c++}
+ !fer.some(f=>f.nao_util!==false&&f.ativo!==false&&f.data===s&&(!f.obra_id||f.obra_id===obraId))
  return d.toISOString().slice(0,10)}
 
 /* ---------- validação (um pedido por vez) ---------- */
