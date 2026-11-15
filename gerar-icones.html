@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex"><title>Gerar ícones do Masters Gestão</title>
+<style>
+body{margin:0;font:16px/1.5 system-ui,Arial,sans-serif;background:#EEF1F8;color:#1B2252;padding:16px}
+.c{max-width:680px;margin:0 auto}h1{font-size:22px}
+.card{background:#fff;border:1px solid #C9D0E8;border-radius:12px;padding:14px;margin:12px 0;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+canvas{width:120px;height:120px;border:1px solid #C9D0E8;border-radius:8px}
+a.b{display:inline-block;background:#313E86;color:#fff;text-decoration:none;font-weight:600;border-radius:10px;padding:12px 18px;min-height:44px}
+small{color:#5E678F}
+</style></head><body><div class="c">
+<h1>Ícones do Masters Gestão</h1>
+<p>Esta página monta os ícones do aplicativo a partir do símbolo da <b>logo oficial</b> (<code>assets/logo.png</code>). Toque em <b>Baixar</b> nos 4 ícones e depois envie os 4 arquivos para a pasta <b>icons</b> do GitHub.</p>
+<div id="lista"><p>Preparando…</p></div>
+<script>
+const SAIDA=[['icon-192.png',192,.70,'Ícone 192 (Android e computador)'],['icon-512.png',512,.70,'Ícone 512 (Android e computador)'],['icon-maskable-512.png',512,.52,'Ícone 512 recortável (Android)'],['apple-touch-icon.png',180,.70,'Ícone do iPhone e iPad (180)']];
+const X0=12,X1=83,Y0=18,Y1=78,AZ=[0x31,0x3E,0x86];
+const img=new Image();img.onload=()=>{try{montar()}catch(e){document.getElementById('lista').innerHTML='<p>Não foi possível montar os ícones: '+e.message+'</p>'}};
+img.onerror=()=>{document.getElementById('lista').innerHTML='<p>Não achei assets/logo.png. Abra esta página dentro do site (mesma pasta do index.html).</p>'};
+img.src='assets/logo.png?'+Date.now();
+function montar(){
+ const w=X1-X0,h=Y1-Y0,s=document.createElement('canvas');s.width=img.width;s.height=img.height;const sc=s.getContext('2d');
+ sc.fillStyle='#fff';sc.fillRect(0,0,s.width,s.height);sc.drawImage(img,0,0);
+ const d=sc.getImageData(X0,Y0,w,h).data,m=document.createElement('canvas');m.width=w;m.height=h;const mc=m.getContext('2d'),md=mc.createImageData(w,h);
+ for(let i=0;i<w*h;i++){const t=Math.max(0,Math.min(1,(255-d[i*4])/(255-AZ[0])));md.data[i*4]=md.data[i*4+1]=md.data[i*4+2]=Math.round(t*255);md.data[i*4+3]=255}
+ mc.putImageData(md,0,0);
+ const L=document.getElementById('lista');L.innerHTML='';
+ SAIDA.forEach(([nome,tam,frac,rot])=>{
+  const alvo=Math.round(tam*frac),esc=alvo/Math.max(w,h),nw=Math.round(w*esc),nh=Math.round(h*esc);
+  const t=document.createElement('canvas');t.width=nw;t.height=nh;const tc=t.getContext('2d');tc.imageSmoothingEnabled=true;tc.imageSmoothingQuality='high';tc.drawImage(m,0,0,nw,nh);
+  const td=tc.getImageData(0,0,nw,nh).data,c=document.createElement('canvas');c.width=c.height=tam;const cc=c.getContext('2d');cc.fillStyle='#fff';cc.fillRect(0,0,tam,tam);
+  const ox=Math.floor((tam-nw)/2),oy=Math.floor((tam-nh)/2),o=cc.getImageData(ox,oy,nw,nh);
+  for(let i=0;i<nw*nh;i++){let v=td[i*4]/255;v=Math.max(0,Math.min(1,(v-.5)/.30+.5));v=v*v*(3-2*v);for(let k=0;k<3;k++)o.data[i*4+k]=Math.round(255*(1-v)+AZ[k]*v);o.data[i*4+3]=255}
+  cc.putImageData(o,ox,oy);
+  const card=document.createElement('div');card.className='card';card.appendChild(c);
+  const tx=document.createElement('div');tx.innerHTML='<b>'+rot+'</b><br><small>'+nome+'</small><br>';
+  const a=document.createElement('a');a.className='b';a.textContent='Baixar '+nome;a.download=nome;
+  c.toBlob(b=>{a.href=URL.createObjectURL(b)},'image/png');tx.appendChild(a);card.appendChild(tx);L.appendChild(card)});
+}
+</script></div></body></html>
