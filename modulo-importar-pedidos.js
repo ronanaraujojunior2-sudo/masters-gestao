@@ -125,7 +125,7 @@ function validarPedido(g,x){const L=g.rows,arq=L[0].arq&&x.multi?' · '+L[0].arq
   if(vistos.has(it.id))return rej('Linha '+r.linha+': o material "'+d+'" aparece mais de uma vez no pedido.');
   vistos.add(it.id);
   const falta=Number(it.quantidade)-(x.comprado[it.id]||0)-(x.usado[it.id]||0);
-  if(q>falta)return rej('Linha '+r.linha+': a quantidade de "'+d+'" ('+q+') é maior do que falta comprar ('+falta+').');
+    if(q>Math.max(falta,0)){const ex=q-Math.max(falta,0);avisos.push('"'+d+'": quantidade comprada acima do solicitado (excedente de '+ex+' '+u+'). O pedido será importado e o excedente ficará registrado, sem passar de 100% no atendimento.')}
   let vu=vz(v.unitario)?null:num(v.unitario),vt=vz(v.total)?null:num(v.total);
   if((vu!==null&&!(vu>=0))||(vt!==null&&!(vt>=0)))return rej('Linha '+r.linha+': valor inválido.');
   if(vu===null&&vt===null)semValor++;
