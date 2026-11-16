@@ -15,6 +15,7 @@ const dsc=s=>String(s==null?'':s).toLowerCase().trim().replace(/\s+/g,' ');
 const vz=v=>String(v==null?'':v).trim()==='';
 const fdt=d=>d?new Date(d+'T00:00').toLocaleDateString('pt-BR'):'—';
 const mo=n=>Number(n).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const nf=n=>Number(n).toLocaleString('pt-BR',{maximumFractionDigits:3});
 const num=v=>{if(typeof v==='number')return v;const s=String(v==null?'':v).replace(/R\$/gi,'').replace(/\s/g,'');if(!s)return NaN;
  const t=s.includes(',')?s.replace(/\./g,'').replace(',','.'):s;return /^-?\d+(\.\d+)?$/.test(t)?Number(t):NaN};
 function parseData(v){let y,m,d;
@@ -124,8 +125,8 @@ async function contexto(){
   lerTudo('pedidos_compra','id,numero_pedido,solicitacao_id'),lerTudo('fornecedores','id,nome,cnpj'),lerTudo('feriados','id,data,obra_id,nao_util,ativo')]);
  const ids=so.map(s=>s.id),itens=[];
  for(let i=0;i<ids.length;i+=200){const d=await lerTudo('solicitacao_itens','id,solicitacao_id,quantidade,materiais(codigo,descricao,unidade)',q=>q.in('solicitacao_id',ids.slice(i,i+200)));itens.push(...d)}
- const pi=await lerTudo('pedido_itens','id,solicitacao_item_id,quantidade');
- const comprado={};pi.forEach(p=>comprado[p.solicitacao_item_id]=(comprado[p.solicitacao_item_id]||0)+Number(p.quantidade));
+ const pi=await lerTudo('pedido_itens','*');   /* '*' funciona com ou sem o SQL 15; qtd_atendimento: item de unidade divergente não regularizado não conta */
+ const comprado={};pi.forEach(p=>comprado[p.solicitacao_item_id]=(comprado[p.solicitacao_item_id]||0)+Number(p.qtd_atendimento!=null?p.qtd_atendimento:p.quantidade));
  const solPorId=new Map(so.map(s=>[s.id,s]));
  return{obras:ob,sol:new Map(so.filter(s=>s.numero_sienge).map(s=>[nk(s.numero_sienge),s])),ped:new Set(pc.map(p=>p.solicitacao_id+'|'+nk(p.numero_pedido))),pedNum:new Map(pc.map(p=>[nk(p.numero_pedido),(solPorId.get(p.solicitacao_id)||{}).numero_sienge||'?'])),forn:fo,fer:fe,itens,comprado}}
 
@@ -157,7 +158,7 @@ function validarPedido(g,x){const L=g.rows,ls=L.map(r=>r.linha).join(', '),arq=L
  if(s.status==='Concluída'||s.status==='Cancelada')return rej('A requisição '+g.req+' está '+s.status.toLowerCase()+'.');
  if(!s.data_aprovacao||s.status==='Aguardando aprovação')return rej('A requisição '+g.req+' ainda não tem a aprovação registrada. Registre a aprovação (ou importe a solicitação já autorizada) e importe de novo.');
  const antes=d1<s.data_aprovacao;   // compra anterior à aprovação formal: NÃO rejeita; pede a autorização emergencial na prévia
- const avisos=[],itens=[],vistos=new Set();let totalGeral=0,semValor=0;
+ const avisos=[],itens=[],vistos=new Set(),divs=[];let totalGeral=0,semValor=0;
  const its=x.itens.filter(i=>i.solicitacao_id===s.id);
  for(const r of L){const v=r.v,d=String(v.descricao==null?'':v.descricao).trim().replace(/\s+/g,' '),u=String(v.unidade==null?'':v.unidade).trim(),q=num(v.quantidade),cod=String(v.codigo==null?'':v.codigo).trim();
   if(!d)return rej('Linha '+r.linha+': material não informado.');
@@ -167,18 +168,20 @@ function validarPedido(g,x){const L=g.rows,ls=L.map(r=>r.linha).join(', '),arq=L
   let it=its.find(i=>dsc(i.materiais.descricao)===dsc(d)&&dsc(i.materiais.unidade)===dsc(u));
   if(!it&&cod){let c2=its.filter(i=>nz(i.materiais.codigo)===nz(cod));if(c2.length>1)c2=c2.filter(i=>dn(i.materiais.descricao)===dn(d));if(c2.length===1)it=c2[0]}
   if(!it)it=its.find(i=>dn(i.materiais.descricao)===dn(d)&&dsc(i.materiais.unidade)===dsc(u));
+  if(!it)it=its.find(i=>dn(i.materiais.descricao)===dn(d)&&!vistos.has(i.id))||its.find(i=>dn(i.materiais.descricao)===dn(d));   /* mesmo material com outra unidade */
   if(!it)return rej('Linha '+r.linha+': o material "'+d+'" não consta na requisição '+g.req+'.');
-  if(dsc(it.materiais.unidade)!==dsc(u))return rej('Linha '+r.linha+': o material "'+d+'" está em "'+u+'" no pedido e em "'+it.materiais.unidade+'" na requisição. Unidades diferentes não são somadas.');
+  const div=dsc(it.materiais.unidade)!==dsc(u);   /* unidade diferente NÃO rejeita: as duas ficam guardadas e o item vira "Unidade divergente" (sem conversão e sem soma) */
   if(vistos.has(it.id))return rej('Linha '+r.linha+': o material "'+d+'" aparece mais de uma vez no pedido.');
   vistos.add(it.id);
   const falta=Number(it.quantidade)-(x.comprado[it.id]||0)-(x.usado[it.id]||0);
-  if(q>Math.max(falta,0)){const ex=q-Math.max(falta,0);avisos.push('"'+d+'": quantidade comprada acima do solicitado (excedente de '+ex+' '+u+'). O pedido será importado e o excedente ficará registrado, sem passar de 100% no atendimento.')}
+  if(div)divs.push('"'+d+'": pedido '+nf(q)+' '+u+' · requisição '+nf(it.quantidade)+' '+it.materiais.unidade);
+  else if(q>Math.max(falta,0)){const ex=q-Math.max(falta,0);avisos.push('"'+d+'": quantidade comprada acima do solicitado (excedente de '+ex+' '+u+'). O pedido será importado e o excedente ficará registrado, sem passar de 100% no atendimento.')}
   let vu=vz(v.unitario)?null:num(v.unitario),vt=vz(v.total)?null:num(v.total);
   if((vu!==null&&!(vu>=0))||(vt!==null&&!(vt>=0)))return rej('Linha '+r.linha+': valor inválido.');
   if(vu===null&&vt===null)semValor++;
   else if(vu!==null&&vt!==null&&!v.ajustes&&Math.abs(vu*q-vt)>0.05)avisos.push('Linha '+r.linha+': valor total ('+mo(vt)+') não confere com quantidade × valor unitário ('+mo(vu*q)+').');
   totalGeral+=vt!==null?vt:(vu!==null?vu*q:0);
-  itens.push({sid:it.id,q,codigo:it.materiais.codigo,descricao:it.materiais.descricao,unidade:it.materiais.unidade,valor_unitario:vu,valor_total:vt})}
+  itens.push({sid:it.id,q,codigo:it.materiais.codigo,descricao:it.materiais.descricao,unidade:it.materiais.unidade,unidade_pedido:u,divergente:div,valor_unitario:vu,valor_total:vt})}
  if(semValor)avisos.push(semValor+' item(ns) sem valor no arquivo.');
  const tm=campo('totalMerc'),tmn=vz(tm)?NaN:num(tm);
  if(Number.isFinite(tmn)&&semValor===0&&Math.abs(tmn-totalGeral)>0.05)avisos.push('A soma dos itens ('+mo(totalGeral)+') não confere com o "Total das mercadorias" do arquivo ('+mo(tmn)+').');
@@ -187,10 +190,11 @@ function validarPedido(g,x){const L=g.rows,ls=L.map(r=>r.linha).join(', '),arq=L
  const pa=campo('previsao'),pa1=vz(pa)?null:parseData(pa),calc=previsao(d1,s.obra_id,x.fer);
  const info=[];
  if(pa1&&pa1!==calc)info.push('O arquivo informa entrega até '+fdt(pa1)+'; o sistema calcula '+fdt(calc)+' (5 dias úteis). Vale a data do sistema; a do arquivo fica guardada para consulta.');
- itens.forEach(i=>x.usado[i.sid]=(x.usado[i.sid]||0)+i.q);
+ itens.forEach(i=>{if(!i.divergente)x.usado[i.sid]=(x.usado[i.sid]||0)+i.q});
+ if(divs.length)info.push('Unidade divergente (o pedido é importado normalmente; as duas unidades ficam guardadas, sem conversão): '+divs.join('; ')+'. Esses itens não entram no % de atendimento até o administrador MASTERS regularizar.');
  return{...base,estado:'novo',total:totalGeral,nitens:itens.length,fornecedorNovo:!fn,obraArquivo:obraArq,antes:antes?{d:d1,ap:s.data_aprovacao}:null,info:info.join(' '),motivo:avisos.length?'ATENÇÃO: '+avisos.join(' '):'',
   payload:{linha:L[0].linha,numero:String(g.n),requisicao:String(g.req),fornecedor:String(forn).trim(),cnpj:vz(campo('cnpj'))?null:String(campo('cnpj')).trim(),data:d1,previsao:pa1,obs:vz(campo('obs'))?null:String(campo('obs')).trim(),
-   itens:itens.map(i=>({codigo:i.codigo,descricao:i.descricao,unidade:i.unidade,quantidade:i.q,valor_unitario:i.valor_unitario,valor_total:i.valor_total}))}}}
+   itens:itens.map(i=>({codigo:i.codigo,descricao:i.descricao,unidade:i.unidade,unidade_pedido:i.unidade_pedido,divergente:i.divergente,quantidade:i.q,valor_unitario:i.valor_unitario,valor_total:i.valor_total}))}}}
 
 function validar(rows,x){const out=[],G=new Map();x.usado={};
  rows.forEach(r=>{const n=vz(r.v.numero)?'':String(r.v.numero).trim(),q=vz(r.v.requisicao)?'':String(r.v.requisicao).trim();
@@ -203,104 +207,3 @@ function validar(rows,x){const out=[],G=new Map();x.usado={};
   if(o.estado==='novo'){if(vis.has(k)){o.estado='rej';o.motivo='O mesmo pedido aparece também no arquivo "'+vis.get(k)+'". Importe só uma vez.';delete o.payload;g.rows.forEach(r=>{})}else vis.set(k,g.rows[0].arq)}
   out.push(o)});
  return out.sort((a,b)=>(a.arq||'').localeCompare(b.arq||'')||a.linha-b.linha)}
-
-/* ---------- autorização emergencial (pedido com data anterior à aprovação formal) ---------- */
-(function(){
- if(!document.getElementById('pc_em_css')){const c=document.createElement('style');c.id='pc_em_css';
-  c.textContent='.hub-t:has(.em-box){max-height:none}.em-box{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:12px;margin:8px 0}.em-av{color:var(--ink);font-weight:700;margin-bottom:6px;border-left:4px solid var(--red);padding-left:8px}.em-box .rq{color:var(--ink)}'+
-  '.em-box label.em-o{display:flex;gap:10px;align-items:flex-start;margin:8px 0;cursor:pointer;font-weight:400}.em-box input[type=radio]{width:22px;height:22px;min-height:22px;flex:0 0 22px;margin-top:2px}'+
-  '.em-f{margin:4px 0 8px 32px}.em-f label{display:block;margin-top:6px;font-weight:600}.em-f input,.em-f textarea{width:100%}.em-box .hint{display:block}.em-cp{margin-top:6px}';
-  document.head.appendChild(c)}
-})();
-const emK=a=>a&&a.payload?String(a.payload.numero)+'|'+String(a.payload.requisicao):'';
-const emHoje=()=>new Date(Date.now()-4*3600e3).toISOString().slice(0,10);   // data de hoje em Manaus
-function emCaixa(a,st){const k=emK(a),v=st[k]||{},c=v.c||{},n='emr_'+k.replace(/\W/g,'_');
- return '<div class="em-box" data-emk="'+esc(k)+'"><div class="em-av">Compra anterior à aprovação formal: pedido de '+fdt(a.antes.d)+'; requisição aprovada em '+fdt(a.antes.ap)+'.</div>'+
-  '<div class="hint">O pedido será importado e ligado à requisição normalmente, e as duas datas serão mantidas como estão. A autorização emergencial é um registro à parte: ela não substitui nem altera a aprovação formal da requisição.</div>'+
-  '<label class="em-o"><input type="radio" name="'+n+'" value="sim"'+(v.sel==='sim'?' checked':'')+'><span><b>Houve autorização emergencial.</b> Informe quem autorizou e por quê.</span></label>'+
-  '<div class="em-f'+(v.sel==='sim'?'':' hide')+'"><label>Responsável pela autorização <b class="rq">*</b><input data-emf="responsavel" maxlength="120" value="'+esc(c.responsavel||'')+'"></label>'+
-   '<label>Data da autorização <b class="rq">*</b><input type="date" data-emf="data" max="'+emHoje()+'" value="'+esc(c.data||'')+'"></label>'+
-   '<label>Justificativa (motivo da compra ou retirada imediata) <b class="rq">*</b><textarea rows="2" maxlength="500" data-emf="justificativa">'+esc(c.justificativa||'')+'</textarea></label></div>'+
-  '<label class="em-o"><input type="radio" name="'+n+'" value="nao"'+(v.sel==='nao'?' checked':'')+'><span><b>Não há autorização emergencial registrada.</b> O pedido entra como “Pendente de regularização” (não é tratado como aprovado nem como irregular) e o administrador MASTERS pode regularizar depois.</span></label></div>'}
-function emErro(v){if(!v||!v.sel)return 'Escolha uma opção de autorização emergencial.';if(v.sel==='nao')return '';const c=v.c||{};
- if(String(c.responsavel||'').trim().length<3)return 'Informe o responsável pela autorização.';if(!c.data)return 'Informe a data da autorização.';if(c.data>emHoje())return 'A data da autorização não pode estar no futuro.';
- if(String(c.justificativa||'').trim().length<5)return 'Escreva a justificativa (mínimo 5 letras).';return ''}
-function emPend(N,st){return N.filter(a=>a.estado==='novo'&&a.antes).map(a=>({a,e:emErro(st[emK(a)])})).filter(x=>x.e)}
-function emDados(a,st){if(!a.antes)return undefined;const v=st[emK(a)]||{},c=v.c||{};
- return v.sel==='sim'?{autorizada:true,responsavel:String(c.responsavel||'').trim(),data:c.data,justificativa:String(c.justificativa||'').trim()}:{autorizada:false}}
-function emLigar(raiz,st,onChange){if(!raiz)return;
- raiz.querySelectorAll('.em-box').forEach(bx=>{const k=bx.dataset.emk;st[k]=st[k]||{c:{}};st[k].c=st[k].c||{};
-  bx.querySelectorAll('input[type=radio]').forEach(r=>r.onchange=()=>{st[k].sel=r.value;bx.querySelector('.em-f').classList.toggle('hide',r.value!=='sim');onChange&&onChange()});
-  bx.querySelectorAll('[data-emf]').forEach(i=>i.oninput=()=>{st[k].c[i.dataset.emf]=i.value;onChange&&onChange()})});
- const todas=raiz.querySelectorAll('.em-box');
- if(todas.length>1&&!raiz.querySelector('.em-cp')){const b=document.createElement('button');b.type='button';b.className='sec em-cp';b.textContent='Usar a escolha do primeiro pedido em todos os pedidos anteriores à aprovação';
-  b.onclick=()=>{const k0=todas[0].dataset.emk,v0=st[k0];if(!v0||!v0.sel)return;todas.forEach(bx=>{const k=bx.dataset.emk;st[k]={sel:v0.sel,c:{...(v0.c||{})}};
-    bx.querySelectorAll('input[type=radio]').forEach(r=>r.checked=r.value===v0.sel);bx.querySelector('.em-f').classList.toggle('hide',v0.sel!=='sim');
-    bx.querySelectorAll('[data-emf]').forEach(i=>i.value=st[k].c[i.dataset.emf]||'')});onChange&&onChange()};
-  todas[todas.length-1].insertAdjacentElement('afterend',b)}}
-const emLista=d=>((d&&d.anteriores_aprovacao)||[]).map(x=>'Pedido '+x.pedido+' (requisição '+x.requisicao+'): pedido em '+fdt(x.data_pedido)+', aprovação em '+fdt(x.data_aprovacao)+' — '+x.situacao);
-const EM={caixa:emCaixa,erro:emErro,pend:emPend,dados:emDados,ligar:emLigar,lista:emLista,chave:emK};
-
-/* ---------- tela ---------- */
-const lista=(t,L)=>L&&L.length?'<h3>'+t+'</h3>'+L.map(x=>`<div class="mv">${/^Pedido/.test(x.motivo||'')?'':'Linha '+x.linha+': '}${esc(x.motivo)}</div>`).join(''):'';
-const relatorio=d=>`<div class="kpis"><div class="card kpi"><b>${d.importados}</b>Pedidos importados</div><div class="card kpi"><b>${d.itens||0}</b>Itens importados</div><div class="card kpi"><b>${d.ignorados}</b>Ignorados</div><div class="card kpi al"><b>${d.rejeitados}</b>Rejeitados</div></div>`+(emLista(d).length?'<h3>Pedidos anteriores à aprovação formal</h3>'+emLista(d).map(x=>'<div class="mv">'+esc(x)+'</div>').join('')+'<p class="hint">A aprovação formal das requisições não foi alterada.</p>':'')+lista('Pedidos ignorados',d.detalhes.ignorados)+lista('Pedidos rejeitados',d.detalhes.rejeitados);
-
-function tela(){cur='imp_ped';mark();const v=$('#view');
- v.innerHTML=`<h1>Importar Pedido de Compra</h1><p class="sub">Nada é gravado antes da sua confirmação. A importação não dá entrada no estoque: o estoque só muda quando o almoxarife confirma o recebimento.</p>
- <div class="card"><h3 style="margin-top:0">Passo 1: escolha o arquivo</h3>
- <p>Use o relatório de <b>Pedido de Compra</b> exportado do Sienge (Excel ou CSV), do jeito que ele sai. Você pode escolher <b>vários arquivos de uma vez</b>.</p>
- <p class="hint">A requisição do pedido precisa estar cadastrada e aprovada (use antes “Importar solicitações”).</p>
- <input id="pc_f" type="file" accept=".xlsx,.xls,.csv" multiple></div><div id="pc_r" style="margin-top:12px"></div>`;
- $('#pc_f').onchange=e=>processar([...e.target.files])}
-
-async function processar(files){const R=$('#pc_r');if(!files||!files.length)return;
- if(!window.XLSX){toast('A biblioteca de planilhas ainda está carregando. Tente de novo em instantes.');return}
- R.innerHTML='<p class="sub">Lendo o arquivo…</p>';
- try{let rows=[];const falhas=[];
-  for(const f of files){try{rows=rows.concat(await ler(f))}catch(e){falhas.push({linha:0,arq:f.name,resumo:'Arquivo '+f.name,estado:'rej',motivo:e.message||String(e)})}}
-  const x=await contexto();x.multi=files.length>1;
-  const res=validar(rows,x).concat(falhas);const EMST={};
-  const N=res.filter(a=>a.estado==='novo'),I=res.filter(a=>a.estado==='ign'),J=res.filter(a=>a.estado==='rej'),AV=N.filter(a=>a.motivo).length;
-  const lb={novo:'Novo',ign:'Ignorado',rej:'Rejeitado'},cl={novo:'blue',ign:'',rej:'red'};
-  const env=a=>({linha:a.linha,motivo:(a.num&&!/^Pedido/.test(a.motivo)?'Pedido '+a.num+': ':'')+(a.arq&&files.length>1?'['+a.arq+'] ':'')+a.motivo});
-  R.innerHTML=`<div class="card"><h3 style="margin-top:0">Passo 2: confira a prévia</h3><p>${files.length} arquivo(s) — ${res.length} pedido(s) encontrado(s)</p>
-  <div class="kpis"><div class="card kpi"><b>${N.length}</b>Novos</div><div class="card kpi"><b>${I.length}</b>Ignorados</div><div class="card kpi al"><b>${J.length}</b>Rejeitados</div></div>
-  <div class="wrap" style="max-height:380px;overflow:auto"><table style="min-width:640px"><thead><tr><th>Pedido</th><th>Itens</th><th>Valor</th><th>Situação</th><th>Motivo ou aviso</th></tr></thead><tbody>${res.slice(0,500).map(a=>`<tr><td>${esc(a.resumo)}</td><td>${a.nitens||'—'}</td><td>${a.estado==='novo'&&a.total?mo(a.total):'—'}</td><td><span class="chip ${cl[a.estado]}">${lb[a.estado]}</span></td><td>${esc(a.motivo||'')}</td></tr>`).join('')}</tbody></table></div>${res.length>500?'<p class="hint">Mostrando os 500 primeiros. A importação considera todos.</p>':''}
-  ${N.some(a=>a.antes)?'<h3>Pedidos anteriores à aprovação formal</h3><div id="pc_em">'+N.filter(a=>a.antes).map(a=>'<div class="mv"><b>'+esc(a.resumo)+'</b>'+emCaixa(a,EMST)+'</div>').join('')+'</div>':''}
-  ${AV?`<label style="display:flex;gap:10px;align-items:center;margin-top:12px"><input type="checkbox" id="pc_av" style="width:24px;min-height:24px"><span><b>${AV} pedido(s) com ATENÇÃO.</b> Li os avisos na prévia e confirmo a importação.</span></label>`:''}
-  <div class="hub-w" id="pc_em_m" style="color:var(--redt);font-weight:600"></div><div class="err hide" id="pc_e"></div><div class="acts"><button class="sec" id="pc_x">Cancelar</button><button class="btn" id="pc_ok" ${N.length&&!AV&&!emPend(N,EMST).length?'':'disabled'}>Passo 3: importar ${N.length} pedido(s) novo(s)</button></div></div>`;
-  $('#pc_x').onclick=()=>{R.innerHTML='';$('#pc_f').value=''};
-  const libera=()=>{const pe=emPend(N,EMST),m=$('#pc_em_m');$('#pc_ok').disabled=!N.length||(AV&&!$('#pc_av').checked)||pe.length>0;if(m)m.textContent=pe.length?pe.length+' pedido(s) anterior(es) à aprovação aguardam a sua escolha sobre a autorização emergencial.':''};
-  if(AV)$('#pc_av').onchange=libera;
-  emLigar($('#pc_em'),EMST,libera);
-  $('#pc_ok').onclick=async()=>{
-   if(!confirm('Importar '+N.length+' pedido(s) novo(s)?\n'+I.length+' serão ignorados e '+J.length+' rejeitados.'))return;
-   const b=$('#pc_ok');b.disabled=true;
-   const{data,error}=await sb.rpc('importar_pedidos',{p_arquivo:files.length>1?files.length+' arquivos ('+files[0].name+', ...)':files[0].name,p_dados:N.map(a=>a.antes?{...a.payload,emergencia:emDados(a,EMST)}:a.payload),p_rejeitados:J.map(env),p_ignorados:I.map(env)});
-   if(error){b.disabled=false;const e=$('#pc_e');e.textContent=msg(error);e.classList.remove('hide');return}
-   cache={};R.innerHTML='<div class="card"><h3 style="margin-top:0">Resultado da importação</h3>'+relatorio(data)+'<p class="hint">Confira em “Solicitações e pedidos”. O material comprado ainda não é material recebido: o recebimento é confirmado em “Receber materiais”.</p></div>';toast('Importação concluída.')}
- }catch(e){R.innerHTML='<div class="err">'+esc(e.message||msg(e))+'</div>'}}
-
-function abrir(){tela();const f=document.getElementById('pc_f');if(f)f.click()}
-
-/* ---------- botões: menu lateral e tela Solicitações e pedidos ---------- */
-function poeMenu(){const m=document.getElementById('menu');if(!m||!me||me.perfil==='FUNCIONARIO'||m.querySelector('[data-v="imp_ped"]'))return;
- const b=document.createElement('button');b.className='nav';b.setAttribute('data-v','imp_ped');b.textContent='Importar pedido de compra';
- const alvo=m.querySelector('[data-v="imp_solic"]')||[...m.querySelectorAll('button.nav')].find(x=>x.textContent.trim()==='Solicitações e pedidos')||m.querySelector('.nav[data-v="painel"]');
- if(alvo)alvo.insertAdjacentElement('afterend',b);else m.insertBefore(b,m.firstChild);
- if(cur==='imp_ped')b.classList.add('on')}
-function poeBarra(){const v=document.getElementById('view'),h=v&&v.querySelector('h1');
- if(!h||h.textContent.trim()!=='Solicitações e pedidos'||!me||me.perfil==='FUNCIONARIO')return;
- const bar=v.querySelector('.bar');if(!bar||bar.querySelector('#imp_ped_btn'))return;
- const b=document.createElement('button');b.id='imp_ped_btn';b.type='button';b.className='sec';b.setAttribute('data-imp2','abrir');b.textContent='Importar Pedido de Compra';bar.appendChild(b)}
-document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-v="imp_ped"],[data-imp2="abrir"]');
- if(!t)return;e.stopPropagation();e.preventDefault();
- if(t.getAttribute('data-imp2')==='abrir')abrir();else tela()},true);
-const _m6=menu;menu=function(){_m6();poeMenu()};
-new MutationObserver(poeMenu).observe(document.getElementById('menu'),{childList:true});
-new MutationObserver(poeBarra).observe(document.getElementById('view'),{childList:true,subtree:true});
-poeMenu();poeBarra();
-window.__impPedTeste={em:EM,ler,validar,achaPedidos,achaPedidoSienge,previsao,parseData,num,contexto,nz,nk,mo,fdt};
-})()}catch(e){window.__impPedErro=e;console.error('Importação de pedidos não carregou:',e);
- const av=()=>{const t=document.getElementById('toast');if(t){t.textContent='Importação de pedidos não carregou: '+e.message;t.classList.add('on')}};
- if(document.readyState==='complete')av();else window.addEventListener('load',av)}
