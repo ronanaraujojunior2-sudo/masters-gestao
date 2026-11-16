@@ -161,7 +161,7 @@ function prever(f,R){const P=$('#obr_p'),res=R.res,N=res.filter(a=>a.estado==='n
  <p class="hint">Arquivo: <b>${esc(f.name)}</b>. Cabeçalho na linha ${R.linhaCab}. Colunas reconhecidas: ${R.mapa.map(esc).join('; ')}.${R.extras.length?' Outras colunas guardadas como informação extra da obra: '+R.extras.map(esc).join(', ')+'.':''}</p>
  ${R.avisosGerais.map(t=>'<p class="hint">'+esc(t)+'</p>').join('')}
  <div class="kpis"><div class="card kpi"><b>${N.length}</b>A cadastrar</div><div class="card kpi"><b>${A.length}</b>A atualizar</div><div class="card kpi"><b>${I.length}</b>Ignoradas</div><div class="card kpi al"><b>${J.length}</b>Rejeitadas</div></div>
- <div class="wrap" style="max-height:420px;overflow:auto"><table style="min-width:640px"><thead><tr><th>Linha</th><th>Código Sienge</th><th>Obra</th><th>Situação</th><th>O que acontece</th></tr></thead><tbody>${L.slice(0,500).map(a=>`<tr><td>${a.linha}</td><td>${esc(a.codigo)}</td><td>${esc(a.nome||(a.existente&&a.existente.nome)||'')}</td><td><span class="chip ${cl[a.estado]}">${lb[a.estado]}</span></td><td>${linhaTxt(a)}${a.avisos&&a.avisos.length?'<br><small style="color:var(--red)">'+a.avisos.map(esc).join('<br>')+'</small>':''}</td></tr>`).join('')}</tbody></table></div>
+ <div class="wrap" style="max-height:420px;overflow:auto"><table style="min-width:640px"><thead><tr><th>Linha</th><th>Código Sienge</th><th>Obra</th><th>Situação</th><th>O que acontece</th></tr></thead><tbody>${L.slice(0,500).map(a=>`<tr><td>${a.linha}</td><td>${esc(a.codigo)}</td><td>${esc(a.nome||(a.existente&&a.existente.nome)||'')}</td><td><span class="chip ${cl[a.estado]}">${lb[a.estado]}</span></td><td>${linhaTxt(a)}${a.avisos&&a.avisos.length?'<br><small class="redt">'+a.avisos.map(esc).join('<br>')+'</small>':''}</td></tr>`).join('')}</tbody></table></div>
  ${L.length>500?'<p class="hint">Mostrando 500 de '+L.length+' (rejeitadas e atualizações aparecem primeiro).</p>':''}
  ${A.length?`<label style="display:block;padding:12px 0"><input type="checkbox" id="obr_ok" style="width:22px;min-height:22px;vertical-align:middle"> <b>Conferi os campos que serão atualizados nas ${A.length} obra(s) já cadastrada(s)</b></label>`:''}
  <div class="err hide" id="obr_e"></div>
@@ -189,7 +189,9 @@ function resultado(d){const P=$('#obr_p'),al=(d.detalhes&&d.detalhes.alteradas)|
 function poeBotao(){if(!adm())return;const v=document.getElementById('view'),h=v&&v.querySelector('h1');
  if(!h||h.textContent.trim()!=='Obras')return;const bar=v.querySelector('.bar');if(!bar||bar.querySelector('#obr_btn'))return;
  const b=document.createElement('button');b.id='obr_btn';b.type='button';b.className='sec';b.textContent='Importar Obras do Sienge';bar.appendChild(b)}
-document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('#obr_btn');if(!t)return;e.stopPropagation();e.preventDefault();abrir()},true);
+document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('#obr_btn');if(!t)return;e.stopPropagation();e.preventDefault();
+ /* o importador oficial (leitor do arquivo real do Sienge + prévia + conciliação) fica em modulo-importacoes.js; este abre-o aqui na tela Obras. Se ele não carregou, usa o importador genérico antigo. */
+ if(window.__hubObras&&window.__hubObras.abrir())return;abrir()},true);
 new MutationObserver(poeBotao).observe(document.getElementById('view'),{childList:true,subtree:true});poeBotao();
 window.__obrTeste={analisar,cabecalho,cnpjOk,mapStatus,parseData};
 })()}catch(e){window.__obrErro=e;console.error('Importar obras não carregou:',e);try{toast('Importar obras não carregou: '+e.message)}catch(x){}}
