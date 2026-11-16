@@ -136,16 +136,18 @@ function render(){const A=$h('hub_area');if(!A||!F)return;
   '<div class="card kpi"><b>'+nO.ok+'</b>Obras já cadastradas</div><div class="card kpi"><b>'+nO.nova+'</b>Obras novas</div><div class="card kpi al"><b>'+nO.cor+'</b>Possíveis correções de código</div></div>'+
   blocoObras()+
   '<h3>Dados encontrados no arquivo</h3><div class="hub-t">'+res.slice(0,500).map(a=>'<div class="mv"><div><b>'+esc(a.resumo)+'</b> '+chip(lb[a.estado],cl[a.estado])+(!sc&&a.estado==='novo'&&a.total?' <span class="hint" style="display:inline">· '+mo(a.total)+'</span>':'')+'</div>'+
-   (a.motivo?'<div class="'+(/^ATENÇÃO/.test(a.motivo)?'hub-w':'hint')+'" style="font-weight:400">'+esc(a.motivo)+'</div>':'')+(a.info?'<span class="hub-i">'+esc(a.info)+'</span>':'')+(a.estado==='novo'?linhasItens(a):'')+'</div>').join('')+'</div>'+(res.length>500?'<p class="hint">Mostrando as 500 primeiras. A importação considera todas.</p>':'')+
+   (a.motivo?'<div class="'+(/^ATENÇÃO/.test(a.motivo)?'hub-w':'hint')+'" style="font-weight:400">'+esc(a.motivo)+'</div>':'')+(a.info?'<span class="hub-i">'+esc(a.info)+'</span>':'')+(a.estado==='novo'?linhasItens(a):'')+(!sc&&a.estado==='novo'&&a.antes&&PC().em?PC().em.caixa(a,F.em):'')+'</div>').join('')+'</div>'+(res.length>500?'<p class="hint">Mostrando as 500 primeiras. A importação considera todas.</p>':'')+
   (AV?'<label class="hub-ck"><input type="checkbox" id="hub_av"><span><b>'+AV+' '+nome+' com ATENÇÃO.</b> Li os avisos da prévia e confirmo a importação.</span></label>':'')+
   '<div class="err hide" id="hub_e"></div><div class="hub-w" id="hub_m"></div><div class="acts"><button type="button" class="sec" id="hub_x">Cancelar</button><button type="button" class="btn" id="hub_ok">Confirmar e importar '+N.length+' '+(sc?'requisição(ões) nova(s)':'pedido(s) novo(s)')+'</button></div></div>';
  atualizaBotao();
- $h('hub_x').onclick=fecharFluxo;$h('hub_ok').onclick=executar;const av=$h('hub_av');if(av)av.onchange=atualizaBotao}
+ $h('hub_x').onclick=fecharFluxo;$h('hub_ok').onclick=executar;const av=$h('hub_av');if(av)av.onchange=atualizaBotao;
+ if(!sc&&PC().em)PC().em.ligar($h('hub_area'),F.em,atualizaBotao)}
 function atualizaBotao(){const b=$h('hub_ok');if(!b)return;
  const bloq=F.E.filter(E=>{const d=F.dec[E.key]||{};return faltaJust(E,d)});
  const av=$h('hub_av'),m=$h('hub_m');
- b.disabled=!F.N||!F.N.length||!!(F.AV&&av&&!av.checked)||bloq.length>0;
- if(m)m.textContent=bloq.length?'Informe a justificativa das obras marcadas como “obra diferente” (mínimo 5 letras).':''}
+ const pe=F.tipo==='pc'&&PC().em&&F.N?PC().em.pend(F.N,F.em):[];
+ b.disabled=!F.N||!F.N.length||!!(F.AV&&av&&!av.checked)||bloq.length>0||pe.length>0;
+ if(m)m.textContent=bloq.length?'Informe a justificativa das obras marcadas como “obra diferente” (mínimo 5 letras).':(pe.length?pe.length+' pedido(s) anterior(es) à aprovação formal aguardam a sua escolha sobre a autorização emergencial (veja a caixa dentro de cada pedido).':'')}
 
 /* ---------- execução (solicitações e pedidos) ---------- */
 function envia(a){return{linha:a.linha||0,motivo:(a.num&&!/^(Requisição|Pedido)/.test(a.motivo||'')?(F.tipo==='sc'?'Requisição ':'Pedido ')+a.num+': ':'')+(a.arq&&F.files.length>1?'['+a.arq+'] ':'')+(a.motivo||'')}}
@@ -153,7 +155,7 @@ async function executar(){
  const b=$h('hub_ok'),E1=$h('hub_e');if(!F||!b)return;
  const N=F.N,I=F.I,J=F.J.slice(),usadas=chavesUsadas(N),sc=F.tipo==='sc';
  const mudancas=usadas.map(k=>{const E=F.E.find(e=>e.key===k);return '• '+resumoAcao(E,F.dec[k])});
- if(!confirm('Importar '+N.length+' '+(sc?'requisição(ões) nova(s)':'pedido(s) novo(s)')+'?\n'+I.length+' já cadastrado(s) serão ignorados e '+J.length+' rejeitado(s).'+(mudancas.length?'\n\nAlterações no cadastro de obras (auditadas):\n'+mudancas.join('\n'):'')+(sc?'':'\n\nIsto não dá entrada no estoque.')))return;
+ if(!confirm('Importar '+N.length+' '+(sc?'requisição(ões) nova(s)':'pedido(s) novo(s)')+'?\n'+I.length+' já cadastrado(s) serão ignorados e '+J.length+' rejeitado(s).'+(mudancas.length?'\n\nAlterações no cadastro de obras (auditadas):\n'+mudancas.join('\n'):'')+(sc?'':(()=>{const A=N.filter(a=>a.antes);if(!A.length)return '';const n1=A.filter(a=>(PC().em.dados(a,F.em)||{}).autorizada).length;return '\n\nPedidos anteriores à aprovação formal: '+n1+' com autorização emergencial e '+(A.length-n1)+' pendente(s) de regularização. A aprovação formal das requisições não é alterada.'})()+'\n\nIsto não dá entrada no estoque.')))return;
  b.disabled=true;E1.classList.add('hide');
  try{
   let cr={resultados:[],cadastradas:0,corrigidas:0,falhas:0};const mapa=new Map();
@@ -162,6 +164,7 @@ async function executar(){
   N.forEach(a=>{const k=chaveRes(a),E=k&&F.E.find(e=>e.key===k);let p=a.payload;const r=k&&mapa.get(k);
    if(r&&!r.ok){J.push({...a,estado:'rej',payload:undefined,motivo:'Obra “'+E.nome+'”: '+r.motivo});return}
    if(sc&&String(p.obra_id).startsWith('__novo__')){const q=r&&r.obra_id;if(!q){J.push({...a,estado:'rej',payload:undefined,motivo:'A obra não foi cadastrada.'});return}p={...p,obra_id:q}}
+   if(!sc&&a.antes&&PC().em)p={...p,emergencia:PC().em.dados(a,F.em)};
    ok.push({...a,payload:p})});
   let data={importados:0,ignorados:I.length,rejeitados:J.length,itens:0,detalhes:{ignorados:[],rejeitados:[]}};
   if(ok.length||I.length||J.length){const r=await sb.rpc(sc?'importar_solicitacoes':'importar_pedidos',{p_arquivo:nomeArq(),p_dados:ok.map(a=>a.payload),p_rejeitados:J.map(envia),p_ignorados:I.map(envia)});
@@ -173,6 +176,7 @@ async function executar(){
   const R={titulo:'Resultado: '+(sc?'Solicitações de Compra':'Pedidos de Compra'),importados:data.importados,atualizados:cr.corrigidas,ignorados:data.ignorados,rejeitados:data.rejeitados,secoes:[]};
   if(cr.resultados.length)R.secoes.push({t:'Obras',l:cr.resultados.map(x=>(x.ok?(x.acao==='cadastrada'?'Obra cadastrada: ':x.acao==='corrigida'?'Código corrigido: ':'Sem alteração: '):'NÃO aplicado: ')+(x.codigo||'')+(x.nome?' · '+x.nome:'')+(x.codigo_anterior?' (antes: '+x.codigo_anterior+')':'')+(x.vinculos&&Object.keys(x.vinculos).length?' — ligações preservadas: '+vincDe(x.vinculos):'')+(x.motivo&&!x.ok?' — '+x.motivo:''))});
   R.secoes.push({t:sc?'Requisições importadas':'Pedidos importados',l:imp.map(a=>a.resumo)});
+  if(!sc&&PC().em)R.secoes.push({t:'Pedidos anteriores à aprovação formal',l:PC().em.lista(data)});
   R.secoes.push({t:'Ignorados',l:I.map(a=>envia(a).motivo).concat(ignRpc.map(x=>x.motivo))});
   R.secoes.push({t:'Rejeitados',l:J.map(a=>envia(a).motivo).concat(rejRpc.map(x=>x.motivo))});
   if(!sc){const ids=[...new Set(imp.map(a=>{const s=F.ctx.sol.get(PC().nk(String(a.payload.requisicao)));return s&&s.id}).filter(Boolean))];
@@ -272,7 +276,7 @@ const TEXTOS={
 function abrirFluxo(tipo){const A=$h('hub_area');if(!A)return;
  if(!window.XLSX){toast('A biblioteca de planilhas ainda está carregando. Tente de novo em instantes.');return}
  if(!(tipo==='sc'?SC():tipo==='pc'?PC():true)){toast('A importação de '+(tipo==='sc'?'solicitações':'pedidos')+' não carregou. Recarregue a página.');return}
- F={tipo,dec:{},E:[],files:[],rows:[],falhas:[],rk:new Map()};ULT=null;
+ F={tipo,dec:{},em:{},E:[],files:[],rows:[],falhas:[],rk:new Map()};ULT=null;
  document.querySelectorAll('#hub [data-hub]').forEach(x=>x.classList.toggle('on',x.dataset.hub===tipo));
  A.innerHTML='<div class="card"><h3 style="margin-top:0">'+TEXTOS[tipo][0]+'</h3><p>'+TEXTOS[tipo][1]+'</p><input id="hub_f" type="file" accept=".xlsx,.xls'+(tipo==='ob'?'':',.csv')+'"'+(tipo==='ob'?'':' multiple')+' aria-label="Escolher arquivo"><div id="hub_r"></div></div>';
  $h('hub_f').onchange=e=>lerArquivos([...e.target.files]);A.scrollIntoView&&A.scrollIntoView({block:'nearest'})}
