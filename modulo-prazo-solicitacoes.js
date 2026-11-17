@@ -1,73 +1,140 @@
-/* MASTERS GESTÃO - Prazo de 5 dias úteis das solicitações (tela "Solicitações e pedidos").
-   Precisa do SQL 19 no Supabase. Sem ele, a coluna mostra "—" e um aviso; nada quebra e nada é gravado.
-   Só LÊ dados: a data limite é calculada e gravada pelo banco quando a aprovação formal é registrada ou corrigida.
-   Mostra, em cada solicitação: data da aprovação, data limite dos 5 dias úteis, dias úteis decorridos, dias úteis restantes
-   e a situação do prazo (Dentro do prazo ou Prazo vencido). Solicitações ainda não aprovadas não têm contagem.
-   Autorização emergencial de pedido NÃO é aprovação formal e não entra nesta contagem. */
+/* MASTERS GESTÃO - Tela "Solicitações e pedidos": os DOIS status separados.
+   STATUS DO PRAZO (administrativo, 5 dias úteis desde a autorização): Aguardando autorização | Dentro do prazo | Prazo vencido | Regularizado
+   STATUS DO RECEBIMENTO (entrega física dos materiais dos pedidos): Não comprado | Aguardando recebimento | Recebimento parcial | Recebido totalmente | Com divergência
+   Um não altera o outro. O atraso de quem foi regularizado continua visível. O recebimento nunca apaga o atraso.
+   Precisa do SQL 20 no Supabase. Sem ele, as colunas mostram "—" com um aviso; nada quebra e nada é gravado (este arquivo só LÊ dados).
+   A coluna "Situação" antiga (um campo genérico que misturava as duas coisas) fica escondida na lista.
+   Carregar DEPOIS de modulo-atendimento.js: os dois status também aparecem no painel "+" de cada solicitação. */
 try{(function(){
 const fd=d=>d?new Date(String(d).slice(0,10)+'T00:00').toLocaleDateString('pt-BR'):'—';
 const sem=d=>d?new Date(String(d).slice(0,10)+'T00:00').toLocaleDateString('pt-BR',{weekday:'short'}).replace('.',''):'';
-const plural=(n,a,b)=>n+' '+(n===1?a:b);
+const dh=d=>d?new Date(d).toLocaleString('pt-BR',{timeZone:'America/Manaus',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+const du=n=>n+' '+(n===1?'dia útil':'dias úteis');
+const x=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 function estilo(){if(document.getElementById('pz_css'))return;const s=document.createElement('style');s.id='pz_css';
- s.textContent='.pz-c{font-size:13px;line-height:1.5;min-width:170px}.pz-c b{font-weight:600}.pz-c .chip{margin-top:4px}'+
- '.pz-bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:8px 0}.pz-bar button{min-height:40px}.pz-bar .on{background:var(--blue);color:var(--onblue,#fff);border-color:var(--blue)}'+
- '.pz-aviso{font-size:13px;margin:6px 0;color:var(--ink)}.pz-off{display:none!important}';
+ s.textContent='.pz-c{font-size:13px;line-height:1.5;min-width:150px}.pz-c b{font-weight:600}.pz-c .chip{margin:2px 0}.pz-c .hint{display:block}'+
+ '.pz-bar{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:8px 0}.pz-bar label{display:flex;gap:6px;align-items:center;font-weight:600;font-size:14px}.pz-bar select{min-height:44px;max-width:100%}'+
+ '.pz-aviso{font-size:13px;margin:6px 0;color:var(--ink)}.pz-off,.pz-hide{display:none!important}'+
+ '.pz-det{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 12px}.pz-det>div{flex:1 1 260px;min-width:0;background:var(--surf,#fff);border:1px solid var(--line,#C9D0E8);border-radius:10px;padding:10px 12px}'+
+ '.pz-det h4{margin:0 0 6px;font-size:14px}.pz-hl{margin:6px 0 0;padding:0;list-style:none;font-size:13px}.pz-hl li{padding:4px 0;border-top:1px solid var(--line,#C9D0E8)}.pz-hl .hint{display:block}';
  document.head.appendChild(s)}
 
-function celula(r){
- if(!r)return '<div class="pz-c">—</div>';
- if(r.situacao==='Aguardando aprovação')return '<div class="pz-c"><span class="chip">Aguardando aprovação</span><br>Contagem ainda não iniciada.</div>';
- if(r.situacao==='Encerrada')return '<div class="pz-c"><span class="chip">Encerrada ('+(r.status==='Cancelada'?'cancelada':'concluída')+')</span><br>Aprovada em '+fd(r.data_aprovacao)+'<br>Prazo era até '+fd(r.data_prazo)+'</div>';
- const venc=r.situacao==='Prazo vencido';
- return '<div class="pz-c">Aprovada em <b>'+fd(r.data_aprovacao)+'</b><br>Prazo até <b>'+fd(r.data_prazo)+'</b> <span class="hint">('+sem(r.data_prazo)+')</span><br>'+
-  'Decorridos: <b>'+r.decorridos+'</b> · Restam: <b>'+r.restantes+'</b><br>'+
-  '<span class="chip '+(venc?'red':'blue')+'">'+(venc?'Prazo vencido':'Dentro do prazo')+'</span>'+(venc&&r.atraso?' <span class="hint">há '+plural(r.atraso,'dia útil','dias úteis')+'</span>':'')+'</div>'}
+/* ---------- textos ---------- */
+function chipPrazo(r){const s=r.situacao;
+ if(s==='Prazo vencido')return '<span class="chip red">Prazo vencido</span>';
+ if(s==='Dentro do prazo'||s==='Regularizado')return '<span class="chip blue">'+x(s)+'</span>';
+ return '<span class="chip">'+x(s)+'</span>'}
+function chipReceb(r){const s=r.situacao;
+ if(s==='Com divergência')return '<span class="chip red">Com divergência</span>';
+ if(s==='Recebido totalmente'||s==='Recebimento parcial')return '<span class="chip blue">'+x(s)+'</span>';
+ return '<span class="chip">'+x(s)+'</span>'}
 
-async function carregar(ids){let a=[];
- for(let k=0;k<ids.length;k+=100){
-  const{data,error}=await sb.from('solicitacoes_prazo').select('id,status,data_aprovacao,data_prazo,decorridos,restantes,atraso,situacao').in('id',ids.slice(k,k+100));
-  if(error)throw error;a=a.concat(data||[])}
- const R={};a.forEach(x=>R[x.id]=x);return R}
+function prazoResumo(r,compacto){
+ if(!r)return '—';const s=r.situacao;
+ if(s==='Aguardando autorização')return '<span class="chip">Aguardando autorização</span><span class="hint">Contagem ainda não iniciada.</span>';
+ if(s==='Cancelada')return '<span class="chip">Cancelada</span>';
+ const base='Autorizada em <b>'+fd(r.data_aprovacao)+'</b><br>Prazo até <b>'+fd(r.data_prazo)+'</b> <span class="hint" style="display:inline">('+sem(r.data_prazo)+')</span><br>';
+ if(s==='Regularizado'){const a=Number(r.atraso||0);
+  return base+'Dias úteis decorridos: <b>'+(r.decorridos==null?'—':r.decorridos)+'</b><br>'+chipPrazo(r)+' <span class="hint" style="display:inline">em '+fd(r.regularizado_em)+'</span><br>'+
+   (a>0?'<span class="chip red">Teve atraso de '+du(a)+'</span>':'<span class="hint">Sem atraso.</span>')}
+ const v=s==='Prazo vencido';
+ return base+'Decorridos: <b>'+r.decorridos+'</b> · Restam: <b>'+r.restantes+'</b><br>'+chipPrazo(r)+(v&&r.atraso?' <span class="hint" style="display:inline">há '+du(r.atraso)+'</span>':'')}
+
+function recebResumo(r){
+ if(!r)return '—';
+ let h=chipReceb(r);
+ if(r.situacao==='Aguardando recebimento'||r.situacao==='Não comprado'){
+  if(r.situacao==='Aguardando recebimento'&&r.itens>0&&r.cobertos<r.itens)h+='<span class="hint">Compra parcial: '+r.cobertos+' de '+r.itens+' item(ns) comprados por inteiro.</span>';
+  if(r.situacao==='Aguardando recebimento')h+='<span class="hint">Nenhum recebimento confirmado ainda.</span>'}
+ else if(r.situacao!=='Cancelada'&&r.itens>0&&r.cobertos<r.itens)h+='<span class="hint">Compra parcial: '+r.cobertos+' de '+r.itens+' item(ns) comprados por inteiro.</span>';
+ return h}
+
+function histLista(L){
+ if(!L||!L.length)return '<p class="hint" style="margin:6px 0 0">Sem eventos de prazo registrados.</p>';
+ return '<ul class="pz-hl">'+L.map(h=>'<li><b>'+x(h.evento)+'</b><span class="hint">'+x(h.detalhe||'')+'</span><span class="hint">'+dh(h.em)+'</span></li>').join('')+'</ul>'}
+
+/* ---------- leitura ---------- */
+async function ler(tab,cols,ids,filtro,ordem){let a=[];
+ for(let k=0;k<ids.length;k+=100){let i=0;
+  for(;;){let q=sb.from(tab).select(cols).in(filtro,ids.slice(k,k+100));if(ordem)q=q.order(ordem);const{data,error}=await q.range(i,i+999);
+   if(error)throw error;a=a.concat(data||[]);if(!data||data.length<1000)break;i+=1000}}
+ return a}
+async function carregar(ids){
+ const[p,r,h]=await Promise.all([
+  ler('solicitacoes_prazo','id,situacao,data_aprovacao,data_prazo,decorridos,restantes,atraso,regularizado_em',ids,'id','id'),
+  ler('solicitacoes_recebimento','id,situacao,itens,cobertos,compra_completa',ids,'id','id'),
+  ler('solicitacao_prazo_hist','id,solicitacao_id,evento,detalhe,em',ids,'solicitacao_id','em')]);
+ const P={},R={},H={};p.forEach(a=>P[a.id]=a);r.forEach(a=>R[a.id]=a);h.forEach(a=>(H[a.solicitacao_id]=H[a.solicitacao_id]||[]).push(a));
+ return{P,R,H}}
+
+/* ---------- tela ---------- */
+const ESTADO=new WeakMap();   /* tabela -> {mapa, f:{p,r}} */
+
+function filtrar(tb){const E=ESTADO.get(tb);if(!E)return;
+ E.mapa.forEach(m=>{const off=(E.f.p&&!(m.p&&m.p.situacao===E.f.p))||(E.f.r&&!(m.r&&m.r.situacao===E.f.r));
+  m.tr.classList.toggle('pz-off',!!off);const nx=m.tr.nextElementSibling;if(nx&&nx.classList.contains('atd-d'))nx.classList.toggle('pz-off',!!off)})}
+
+function filtros(tb,dp,dr){
+ const cont=D=>{const c={};D.forEach(v=>c[v]=(c[v]||0)+1);return c};
+ const opts=(ordem,c)=>'<option value="">Todas</option>'+ordem.filter(v=>c[v]).map(v=>'<option value="'+x(v)+'">'+x(v)+' ('+c[v]+')</option>').join('');
+ const bar=document.createElement('div');bar.className='pz-bar';
+ bar.innerHTML='<label>Prazo <select data-pzs="p">'+opts(['Aguardando autorização','Dentro do prazo','Prazo vencido','Regularizado','Cancelada'],cont(dp))+'</select></label>'+
+  '<label>Recebimento <select data-pzs="r">'+opts(['Não comprado','Aguardando recebimento','Recebimento parcial','Recebido totalmente','Com divergência','Cancelada'],cont(dr))+'</select></label>';
+ bar.querySelectorAll('select').forEach(sel=>sel.onchange=()=>{const E=ESTADO.get(tb);E.f[sel.dataset.pzs]=sel.value;filtrar(tb)});
+ return bar}
+
+function detalhe(tb){
+ const E=ESTADO.get(tb);if(!E)return;const ncol=tb.querySelector('thead tr').children.length;
+ E.mapa.forEach((m,id)=>{
+  const nx=m.tr.nextElementSibling;if(!nx||!nx.classList.contains('atd-d'))return;
+  const td=nx.querySelector('td[colspan]');if(td&&Number(td.getAttribute('colspan'))!==ncol)td.setAttribute('colspan',ncol);
+  const w=nx.querySelector('.atd-w');if(!w||w.querySelector('.pz-det')||!m.carregado)return;
+  const d=document.createElement('div');d.className='pz-det';
+  d.innerHTML='<div><h4>Status do prazo</h4><div class="pz-c">'+prazoResumo(m.p)+'</div><h4 style="margin-top:10px">Histórico do prazo</h4>'+histLista(m.h)+'</div>'+
+   '<div><h4>Status do recebimento</h4><div class="pz-c">'+recebResumo(m.r)+'</div><p class="hint" style="margin:8px 0 0">O prazo e o recebimento são independentes: receber o material não apaga um atraso, e um prazo vencido não quer dizer que o material não chegou.</p></div>';
+  w.insertBefore(d,w.firstChild)})}
 
 function aplicar(){
  const v=document.getElementById('view'),h=v&&v.querySelector('h1');
  if(!h||h.textContent.trim()!=='Solicitações e pedidos')return;
- const tb=v.querySelector('table');if(!tb||tb.dataset.pz)return;
+ const tb=v.querySelector('table');if(!tb)return;
+ if(tb.dataset.pz){if(ESTADO.has(tb))detalhe(tb);return}
  const hr=tb.querySelector('thead tr');if(!hr)return;
- const ths=[...hr.children],iSit=ths.findIndex(x=>/^Situação/i.test(x.textContent.trim()));
+ const ths=[...hr.children],iSit=ths.findIndex(y=>/^Situação/i.test(y.textContent.trim()));
  const rows=[...tb.querySelectorAll('tbody tr')].filter(r=>r.querySelector('[data-o]'));
  if(!rows.length||iSit<0)return;
  tb.dataset.pz='1';estilo();
- hr.insertBefore(Object.assign(document.createElement('th'),{textContent:'Prazo (5 dias úteis)'}),ths[iSit]);
+ const thSit=ths[iSit];thSit.classList.add('pz-hide');
+ const th1=Object.assign(document.createElement('th'),{textContent:'Status do prazo'}),th2=Object.assign(document.createElement('th'),{textContent:'Status do recebimento'});
+ hr.insertBefore(th1,thSit);hr.insertBefore(th2,thSit);
  const mapa=new Map();
- rows.forEach(tr=>{const id=tr.querySelector('[data-o]').dataset.o,td=document.createElement('td');td.innerHTML='…';
-  tr.insertBefore(td,tr.children[iSit]);mapa.set(id,{tr,td})});
- carregar([...mapa.keys()]).then(R=>{
+ rows.forEach(tr=>{const id=tr.querySelector('[data-o]').dataset.o,old=tr.children[iSit],t1=document.createElement('td'),t2=document.createElement('td');
+  t1.innerHTML=t2.innerHTML='…';if(old)old.classList.add('pz-hide');
+  tr.insertBefore(t1,old||null);tr.insertBefore(t2,old||null);mapa.set(id,{tr,t1,t2,carregado:false})});
+ ESTADO.set(tb,{mapa,f:{p:'',r:''}});
+ carregar([...mapa.keys()]).then(({P,R,H})=>{
   if(!document.body.contains(tb))return;
-  let dentro=0,venc=0;
-  mapa.forEach((m,id)=>{const r=R[id];m.td.innerHTML=celula(r);m.r=r;
-   if(r&&r.situacao==='Dentro do prazo')dentro++;else if(r&&r.situacao==='Prazo vencido')venc++});
-  v.querySelectorAll('.pz-bar,.pz-aviso').forEach(x=>x.remove());
-  const bar=document.createElement('div');bar.className='pz-bar';
-  bar.innerHTML='<b>Prazo:</b> <button type="button" class="sec on" data-pz="">Todas</button><button type="button" class="sec" data-pz="Dentro do prazo">Dentro do prazo ('+dentro+')</button><button type="button" class="sec" data-pz="Prazo vencido">Prazo vencido ('+venc+')</button>';
-  const alvo=tb.closest('.card')||tb.parentElement;alvo.insertAdjacentElement('beforebegin',bar);
-  bar.querySelectorAll('[data-pz]').forEach(b=>b.onclick=()=>{
-   bar.querySelectorAll('[data-pz]').forEach(x=>x.classList.toggle('on',x===b));
-   const f=b.dataset.pz;
-   mapa.forEach(m=>{const off=!!f&&!(m.r&&m.r.situacao===f);m.tr.classList.toggle('pz-off',off);
-    const nx=m.tr.nextElementSibling;if(nx&&nx.classList.contains('atd-d'))nx.classList.toggle('pz-off',off)})});
-  window.__pzOk=(window.__pzOk||0)+1;
+  const ps=[],rs=[];
+  mapa.forEach((m,id)=>{m.p=P[id];m.r=R[id];m.h=H[id]||[];m.carregado=true;
+   m.t1.innerHTML='<div class="pz-c">'+prazoResumo(m.p)+'</div>';m.t2.innerHTML='<div class="pz-c">'+recebResumo(m.r)+'</div>';
+   if(m.p)ps.push(m.p.situacao);if(m.r)rs.push(m.r.situacao)});
+  v.querySelectorAll('.pz-bar,.pz-aviso').forEach(y=>y.remove());
+  const alvo=tb.closest('.card')||tb.parentElement;
+  alvo.insertAdjacentElement('beforebegin',filtros(tb,ps,rs));
+  detalhe(tb);window.__pzOk=(window.__pzOk||0)+1;
  }).catch(e=>{
-  const falta=/does not exist|Could not find the table|schema cache/i.test((e&&e.message)||'');
-  mapa.forEach(m=>{m.td.textContent='—';m.td.title='Não foi possível carregar o prazo: '+(e&&e.message||e)});
-  v.querySelectorAll('.pz-bar,.pz-aviso').forEach(x=>x.remove());
+  const falta=/does not exist|Could not find the table|schema cache|relation/i.test((e&&e.message)||'');
+  mapa.forEach(m=>{m.t1.textContent=m.t2.textContent='—';m.t1.title=m.t2.title='Não foi possível carregar: '+(e&&e.message||e)});
+  v.querySelectorAll('.pz-bar,.pz-aviso').forEach(y=>y.remove());
   const av=document.createElement('div');av.className='pz-aviso';
-  av.textContent=falta?'O prazo de 5 dias úteis ainda não está ativo: falta instalar o SQL 19 no Supabase.':'Não foi possível carregar o prazo de 5 dias úteis agora. Atualize a página.';
+  av.textContent=falta?'Os status de prazo e de recebimento ainda não estão ativos: falta instalar o SQL 20 no Supabase.':'Não foi possível carregar os status de prazo e de recebimento agora. Atualize a página.';
   (tb.closest('.card')||tb.parentElement).insertAdjacentElement('beforebegin',av);
+  /* sem os dados novos, a coluna antiga volta a aparecer */
+  thSit.classList.remove('pz-hide');mapa.forEach(m=>{const o=m.t2.nextElementSibling;if(o)o.classList.remove('pz-hide')});
   window.__pzErro=e});
 }
 new MutationObserver(aplicar).observe(document.getElementById('view'),{childList:true,subtree:true});
 aplicar();
-window.__pzTeste={celula,aplicar};
-})()}catch(e){window.__pzErro0=e;console.error('Prazo das solicitações não carregou:',e)}
+window.__pzTeste={prazoResumo,recebResumo,aplicar};
+})()}catch(e){window.__pzErro0=e;console.error('Status de prazo e recebimento não carregou:',e)}
