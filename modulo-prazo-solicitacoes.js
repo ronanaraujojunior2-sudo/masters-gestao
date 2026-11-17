@@ -2,7 +2,8 @@
    STATUS DO PRAZO (administrativo, 5 dias úteis desde a autorização): Aguardando autorização | Dentro do prazo | Prazo vencido | Regularizado
    STATUS DO RECEBIMENTO (entrega física dos materiais dos pedidos): Não comprado | Aguardando recebimento | Recebimento parcial | Recebido totalmente | Com divergência
    Um não altera o outro. O atraso de quem foi regularizado continua visível. O recebimento nunca apaga o atraso.
-   Precisa do SQL 20 no Supabase. Sem ele, as colunas mostram "—" com um aviso; nada quebra e nada é gravado (este arquivo só LÊ dados).
+   v3: o Status do recebimento passa a refletir os recebimentos registrados (SQL 21): parcial, total e com divergência; atualiza sozinho (window.__pzRecarregar).
+   Precisa do SQL 20 no Supabase (e do 21 para os recebimentos). Sem eles, as colunas mostram "—" com um aviso; nada quebra e nada é gravado (este arquivo só LÊ dados).
    A coluna "Situação" antiga (um campo genérico que misturava as duas coisas) fica escondida na lista.
    Carregar DEPOIS de modulo-atendimento.js: os dois status também aparecem no painel "+" de cada solicitação. */
 try{(function(){
@@ -41,13 +42,18 @@ function prazoResumo(r,compacto){
  const v=s==='Prazo vencido';
  return base+'Decorridos: <b>'+r.decorridos+'</b> · Restam: <b>'+r.restantes+'</b><br>'+chipPrazo(r)+(v&&r.atraso?' <span class="hint" style="display:inline">há '+du(r.atraso)+'</span>':'')}
 
-function recebResumo(r){
+function recebResumo(r,id){
  if(!r)return '—';
- let h=chipReceb(r);
- if(r.situacao==='Aguardando recebimento'||r.situacao==='Não comprado'){
-  if(r.situacao==='Aguardando recebimento'&&r.itens>0&&r.cobertos<r.itens)h+='<span class="hint">Compra parcial: '+r.cobertos+' de '+r.itens+' item(ns) comprados por inteiro.</span>';
-  if(r.situacao==='Aguardando recebimento')h+='<span class="hint">Nenhum recebimento confirmado ainda.</span>'}
- else if(r.situacao!=='Cancelada'&&r.itens>0&&r.cobertos<r.itens)h+='<span class="hint">Compra parcial: '+r.cobertos+' de '+r.itens+' item(ns) comprados por inteiro.</span>';
+ const s=r.situacao;let h=chipReceb(r);
+ if(s==='Cancelada')return h;
+ if(s==='Não comprado')return h+'<span class="hint">Ainda sem pedido de compra.</span>';
+ const parc=r.itens>0&&r.cobertos<r.itens?'<span class="hint">Compra parcial: '+r.cobertos+' de '+r.itens+' item(ns) comprados por inteiro.</span>':'';
+ const ult=r.ultimo_recebimento?'<span class="hint">Último recebimento: '+fd(r.ultimo_recebimento)+'</span>':'';
+ if(s==='Aguardando recebimento')h+='<span class="hint">Nenhum recebimento registrado ainda.</span>'+parc;
+ else if(s==='Recebimento parcial')h+=(r.linhas!=null?'<span class="hint">'+(r.linhas-r.linhas_pendentes)+' de '+r.linhas+' linha(s) de pedido recebida(s) por inteiro.</span>':'')+ult+parc;
+ else if(s==='Recebido totalmente')h+='<span class="hint">Entrega concluída: nada pendente nos pedidos.</span>'+ult;
+ else if(s==='Com divergência')h+='<span class="hint">'+(r.divergencias_abertas!=null?r.divergencias_abertas+' divergência(s) aberta(s). ':'')+'Resolva no painel "+" da solicitação.</span>'+ult+parc;
+ if(id&&typeof window.__rcBotao==='function')h+=window.__rcBotao(id,r);
  return h}
 
 function histLista(L){
@@ -60,10 +66,15 @@ async function ler(tab,cols,ids,filtro,ordem){let a=[];
   for(;;){let q=sb.from(tab).select(cols).in(filtro,ids.slice(k,k+100));if(ordem)q=q.order(ordem);const{data,error}=await q.range(i,i+999);
    if(error)throw error;a=a.concat(data||[]);if(!data||data.length<1000)break;i+=1000}}
  return a}
+let V3=true;   /* com o SQL 21 a consulta traz linhas, pendências, divergências e último recebimento */
+async function lerReceb(ids){
+ if(V3){try{return await ler('solicitacoes_recebimento','id,situacao,itens,cobertos,compra_completa,linhas,linhas_pendentes,divergencias_abertas,ultimo_recebimento',ids,'id','id')}
+  catch(e){if(/column|42703|schema cache/i.test((e&&(e.message||e.code))||''))V3=false;else throw e}}
+ return ler('solicitacoes_recebimento','id,situacao,itens,cobertos,compra_completa',ids,'id','id')}
 async function carregar(ids){
  const[p,r,h]=await Promise.all([
   ler('solicitacoes_prazo','id,situacao,data_aprovacao,data_prazo,decorridos,restantes,atraso,regularizado_em',ids,'id','id'),
-  ler('solicitacoes_recebimento','id,situacao,itens,cobertos,compra_completa',ids,'id','id'),
+  lerReceb(ids),
   ler('solicitacao_prazo_hist','id,solicitacao_id,evento,detalhe,em',ids,'solicitacao_id','em')]);
  const P={},R={},H={};p.forEach(a=>P[a.id]=a);r.forEach(a=>R[a.id]=a);h.forEach(a=>(H[a.solicitacao_id]=H[a.solicitacao_id]||[]).push(a));
  return{P,R,H}}
@@ -117,7 +128,7 @@ function aplicar(){
   if(!document.body.contains(tb))return;
   const ps=[],rs=[];
   mapa.forEach((m,id)=>{m.p=P[id];m.r=R[id];m.h=H[id]||[];m.carregado=true;
-   m.t1.innerHTML='<div class="pz-c">'+prazoResumo(m.p)+'</div>';m.t2.innerHTML='<div class="pz-c">'+recebResumo(m.r)+'</div>';
+   m.t1.innerHTML='<div class="pz-c">'+prazoResumo(m.p)+'</div>';m.t2.innerHTML='<div class="pz-c">'+recebResumo(m.r,id)+'</div>';
    if(m.p)ps.push(m.p.situacao);if(m.r)rs.push(m.r.situacao)});
   v.querySelectorAll('.pz-bar,.pz-aviso').forEach(y=>y.remove());
   const alvo=tb.closest('.card')||tb.parentElement;
@@ -134,7 +145,22 @@ function aplicar(){
   thSit.classList.remove('pz-hide');mapa.forEach(m=>{const o=m.t2.nextElementSibling;if(o)o.classList.remove('pz-hide')});
   window.__pzErro=e});
 }
+/* recarrega os dois status (e os painéis) sem sair da tela: usado depois de registrar um recebimento e pelo tempo real */
+async function recarregar(){
+ const tb=document.querySelector('#view table[data-pz]'),E=tb&&ESTADO.get(tb);if(!E||E.recarga)return;E.recarga=true;
+ try{const{P,R,H}=await carregar([...E.mapa.keys()]);if(!document.body.contains(tb))return;
+  const ps=[],rs=[];
+  E.mapa.forEach((m,id)=>{if(!m.carregado)return;m.p=P[id];m.r=R[id];m.h=H[id]||[];
+   m.t1.innerHTML='<div class="pz-c">'+prazoResumo(m.p)+'</div>';m.t2.innerHTML='<div class="pz-c">'+recebResumo(m.r,id)+'</div>';
+   const nx=m.tr.nextElementSibling,pd=nx&&nx.classList&&nx.classList.contains('atd-d')&&nx.querySelector('.pz-det');if(pd)pd.remove();
+   if(m.p)ps.push(m.p.situacao);if(m.r)rs.push(m.r.situacao)});
+  const velho=document.querySelector('#view .pz-bar');
+  if(velho){const nova=filtros(tb,ps,rs);nova.querySelectorAll('select').forEach(sel=>{const v=E.f[sel.dataset.pzs]||'';sel.value=[...sel.options].some(o=>o.value===v)?v:'';E.f[sel.dataset.pzs]=sel.value});velho.replaceWith(nova)}
+  detalhe(tb);filtrar(tb);window.__pzRecarga=(window.__pzRecarga||0)+1}
+ catch(e){window.__pzErroRecarga=e}
+ finally{E.recarga=false}}
+window.__pzRecarregar=recarregar;
 new MutationObserver(aplicar).observe(document.getElementById('view'),{childList:true,subtree:true});
 aplicar();
-window.__pzTeste={prazoResumo,recebResumo,aplicar};
+window.__pzTeste={prazoResumo,recebResumo,aplicar,recarregar};
 })()}catch(e){window.__pzErro0=e;console.error('Status de prazo e recebimento não carregou:',e)}
