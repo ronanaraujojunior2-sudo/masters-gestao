@@ -123,8 +123,8 @@ function blocoObras(){const L=F.E;if(!L.length)return '';
  return '<h3>Obras do arquivo</h3>'+(F.semSql?'<div class="err">Falta instalar o SQL 12 no Supabase para o sistema conferir e corrigir obras. Por enquanto vale a regra antiga: a obra precisa estar cadastrada.</div>':'')+
   (!F.base.ref.size&&!F.semSql?'<p class="hint">A relação oficial de obras do Sienge ainda não foi carregada. Carregue em Obras → “Importar Obras do Sienge” para o sistema conferir os códigos oficiais.</p>':'')+tab+dec}
 function linhasItens(a){const L=(a.payload&&a.payload.itens)||[];if(!L.length)return '';
- return '<details><summary>'+L.length+' item(ns)</summary><table style="min-width:440px"><thead><tr><th>Material</th><th>Un.</th><th>Qtd.</th>'+(L[0].valor_total!==undefined?'<th>Valor unit.</th><th>Total</th>':'')+'</tr></thead><tbody>'+
-  L.map(i=>'<tr><td>'+esc((i.codigo?i.codigo+' - ':'')+i.descricao)+'</td><td>'+(i.divergente?esc(i.unidade_pedido)+'<span class="hub-i">Unidade divergente (requisição: '+esc(i.unidade)+')</span>':esc(i.unidade))+'</td><td>'+nf(i.quantidade)+'</td>'+(i.valor_total!==undefined?'<td>'+(i.valor_unitario==null?'—':mo(i.valor_unitario))+'</td><td>'+(i.valor_total==null?'—':mo(i.valor_total))+'</td>':'')+'</tr>').join('')+'</tbody></table></details>'}
+ return '<details><summary>'+L.length+' item(ns)</summary><table style="min-width:440px"><thead><tr><th>Material</th><th>Un.</th><th>Qtd.</th>'+(L[0].valor_total!==undefined?'<th>Valor unit.</th><th>Total</th>':'')+(L[0].vinculo!==undefined?'<th>Ligação à requisição</th>':'')+'</tr></thead><tbody>'+
+  L.map(i=>'<tr><td>'+(i.linha?'<span class="hint" style="display:inline">Linha '+i.linha+' · </span>':'')+esc((i.codigo?i.codigo+' - ':'')+i.descricao)+(i.insumo_original&&/ \| /.test(i.insumo_original)?'<span class="hub-i">Especificação no arquivo: '+esc(i.insumo_original)+'</span>':'')+'</td><td>'+(i.divergente?esc(i.unidade_pedido)+'<span class="hub-i">Unidade divergente (requisição: '+esc(i.unidade)+')</span>':esc(i.unidade))+'</td><td>'+nf(i.quantidade)+'</td>'+(i.valor_total!==undefined?'<td>'+(i.valor_unitario==null?'—':mo(i.valor_unitario))+'</td><td>'+(i.valor_total==null?'—':mo(i.valor_total))+'</td>':'')+(i.vinculo!==undefined?'<td>'+(i.solicitacao_item_id?esc(i.vinculo||'Automático'):'<b>A conferir</b> (escolha abaixo)')+(i.vinculo_obs?'<span class="hub-i">'+esc(i.vinculo_obs)+'</span>':'')+'</td>':'')+'</tr>').join('')+'</tbody></table></details>'}
 
 /* ---------- prévia (solicitações e pedidos) ---------- */
 function render(){const A=$h('hub_area');if(!A||!F)return;
@@ -139,24 +139,27 @@ function render(){const A=$h('hub_area');if(!A||!F)return;
   '<div class="card kpi"><b>'+nO.ok+'</b>Obras já cadastradas</div><div class="card kpi"><b>'+nO.nova+'</b>Obras novas</div><div class="card kpi al"><b>'+nO.cor+'</b>Possíveis correções de código</div></div>'+
   blocoObras()+
   '<h3>Dados encontrados no arquivo</h3><div class="hub-t">'+res.slice(0,500).map(a=>'<div class="mv"><div><b>'+esc(a.resumo)+'</b> '+chip(lb[a.estado],cl[a.estado])+(!sc&&a.estado==='novo'&&a.total?' <span class="hint" style="display:inline">· '+mo(a.total)+'</span>':'')+'</div>'+
-   (a.motivo?'<div class="'+(/^ATENÇÃO/.test(a.motivo)?'hub-w':'hint')+'" style="font-weight:400">'+esc(a.motivo)+'</div>':'')+(a.info?'<span class="hub-i">'+esc(a.info)+'</span>':'')+(a.estado==='novo'?linhasItens(a):'')+(!sc&&a.estado==='novo'&&a.antes&&PC().em?PC().em.caixa(a,F.em):'')+'</div>').join('')+'</div>'+(res.length>500?'<p class="hint">Mostrando as 500 primeiras. A importação considera todas.</p>':'')+
+   (a.motivo?'<div class="'+(/^ATENÇÃO/.test(a.motivo)?'hub-w':'hint')+'" style="font-weight:400">'+esc(a.motivo)+'</div>':'')+(a.info?'<span class="hub-i">'+esc(a.info)+'</span>':'')+(a.estado==='novo'?linhasItens(a):'')+(!sc&&PC().vin&&PC().vin.tem(a)?PC().vin.caixa(a,F.vin):'')+(!sc&&a.estado==='novo'&&a.antes&&PC().em?PC().em.caixa(a,F.em):'')+'</div>').join('')+'</div>'+(res.length>500?'<p class="hint">Mostrando as 500 primeiras. A importação considera todas.</p>':'')+
   (AV?'<label class="hub-ck"><input type="checkbox" id="hub_av"><span><b>'+AV+' '+nome+' com ATENÇÃO.</b> Li os avisos da prévia e confirmo a importação.</span></label>':'')+
   '<div class="err hide" id="hub_e"></div><div class="hub-w" id="hub_m"></div><div class="acts"><button type="button" class="sec" id="hub_x">Cancelar</button><button type="button" class="btn" id="hub_ok">Confirmar e importar '+N.length+' '+(sc?'requisição(ões) nova(s)':'pedido(s) novo(s)')+'</button></div></div>';
  atualizaBotao();
  $h('hub_x').onclick=fecharFluxo;$h('hub_ok').onclick=executar;const av=$h('hub_av');if(av)av.onchange=atualizaBotao;
- if(!sc&&PC().em)PC().em.ligar($h('hub_area'),F.em,atualizaBotao)}
+ if(!sc&&PC().em)PC().em.ligar($h('hub_area'),F.em,atualizaBotao);
+ if(!sc&&PC().vin)PC().vin.ligar($h('hub_area'),F.vin,atualizaBotao)}
 function atualizaBotao(){const b=$h('hub_ok');if(!b)return;
  const bloq=F.E.filter(E=>{const d=F.dec[E.key]||{};return faltaJust(E,d)});
  const av=$h('hub_av'),m=$h('hub_m');
- const pe=F.tipo==='pc'&&PC().em&&F.N?PC().em.pend(F.N,F.em):[];
- b.disabled=!F.N||!F.N.length||!!(F.AV&&av&&!av.checked)||bloq.length>0||pe.length>0;
- if(m)m.textContent=bloq.length?'Informe a justificativa das obras marcadas como “obra diferente” (mínimo 5 letras).':(pe.length?pe.length+' pedido(s) anterior(es) à aprovação formal aguardam a sua escolha sobre a autorização emergencial (veja a caixa dentro de cada pedido).':'')}
+ const VI=F.tipo==='pc'&&PC().vin,Nv=F.N?F.N.filter(a=>!(VI&&VI.pula(a,F.vin))):[];   /* pedidos deixados para depois não exigem as outras escolhas */
+ const pe=F.tipo==='pc'&&PC().em&&F.N?PC().em.pend(Nv,F.em):[],pv=VI&&F.N?VI.pend(F.N,F.vin):[];
+ b.disabled=!F.N||!Nv.length||!!(F.AV&&av&&!av.checked)||bloq.length>0||pe.length>0||pv.length>0;
+ if(m)m.textContent=bloq.length?'Informe a justificativa das obras marcadas como “obra diferente” (mínimo 5 letras).':(pv.length?pv.length+' pedido(s) aguardam a sua escolha do item da requisição (veja a caixa “Conferência” dentro de cada pedido) ou marque “Não importar este pedido agora”.':pe.length?pe.length+' pedido(s) anterior(es) à aprovação formal aguardam a sua escolha sobre a autorização emergencial (veja a caixa dentro de cada pedido).':'')}
 
 /* ---------- execução (solicitações e pedidos) ---------- */
 function envia(a){return{linha:a.linha||0,motivo:(a.num&&!/^(Requisição|Pedido)/.test(a.motivo||'')?(F.tipo==='sc'?'Requisição ':'Pedido ')+a.num+': ':'')+(a.arq&&F.files.length>1?'['+a.arq+'] ':'')+(a.motivo||'')}}
 async function executar(){
  const b=$h('hub_ok'),E1=$h('hub_e');if(!F||!b)return;
- const N=F.N,I=F.I,J=F.J.slice(),usadas=chavesUsadas(N),sc=F.tipo==='sc';
+ const sc=F.tipo==='sc',VI=!sc&&PC().vin,P=VI?F.N.filter(a=>VI.pula(a,F.vin)):[],N=F.N.filter(a=>!P.includes(a)),I=F.I,J=F.J.slice(),usadas=chavesUsadas(N);
+ P.forEach(a=>J.push({...a,estado:'rej',payload:undefined,motivo:'Não importado por escolha sua na conferência dos itens. Nada foi gravado deste pedido; importe-o de novo quando for conferir.'}));
  const mudancas=usadas.map(k=>{const E=F.E.find(e=>e.key===k);return '• '+resumoAcao(E,F.dec[k])});
  if(!confirm('Importar '+N.length+' '+(sc?'requisição(ões) nova(s)':'pedido(s) novo(s)')+'?\n'+I.length+' já cadastrado(s) serão ignorados e '+J.length+' rejeitado(s).'+(mudancas.length?'\n\nAlterações no cadastro de obras (auditadas):\n'+mudancas.join('\n'):'')+(sc?'':(()=>{const A=N.filter(a=>a.antes);if(!A.length)return '';const n1=A.filter(a=>(PC().em.dados(a,F.em)||{}).autorizada).length;return '\n\nPedidos anteriores à aprovação formal: '+n1+' com autorização emergencial e '+(A.length-n1)+' pendente(s) de regularização. A aprovação formal das requisições não é alterada.'})()+'\n\nIsto não dá entrada no estoque.')))return;
  b.disabled=true;E1.classList.add('hide');
@@ -164,7 +167,7 @@ async function executar(){
   let cr={resultados:[],cadastradas:0,corrigidas:0,falhas:0};const mapa=new Map();
   if(usadas.length){const{data,error}=await sb.rpc('obras_conciliar',{p_arquivo:nomeArq(),p_acoes:usadas.map(k=>acaoDe(F.E.find(e=>e.key===k),F.dec[k]))});if(error)throw error;cr=data;usadas.forEach((k,i)=>mapa.set(k,cr.resultados[i]))}
   const ok=[];
-  N.forEach(a=>{const k=chaveRes(a),E=k&&F.E.find(e=>e.key===k);let p=a.payload;const r=k&&mapa.get(k);
+  N.forEach(a=>{const k=chaveRes(a),E=k&&F.E.find(e=>e.key===k);let p=VI?VI.dados(a,F.vin):a.payload;const r=k&&mapa.get(k);
    if(r&&!r.ok){J.push({...a,estado:'rej',payload:undefined,motivo:'Obra “'+E.nome+'”: '+r.motivo});return}
    if(sc&&String(p.obra_id).startsWith('__novo__')){const q=r&&r.obra_id;if(!q){J.push({...a,estado:'rej',payload:undefined,motivo:'A obra não foi cadastrada.'});return}p={...p,obra_id:q}}
    if(!sc&&a.antes&&PC().em)p={...p,emergencia:PC().em.dados(a,F.em)};
@@ -196,7 +199,7 @@ async function atendimento(ids){const out=[],T=window.__atdTeste;if(!T)return ou
    sb.from('pedidos_compra').select('id,solicitacao_id,numero_pedido,data_pedido,fornecedores(nome),pedido_itens(*)').eq('solicitacao_id',id)]);
   if(a.error||b.error)continue;const r=T.calcular(a.data,b.data),s=[...F.ctx.sol.values()].find(x=>x.id===id);
   out.push('Requisição '+(s?s.numero_sienge:'?')+': '+(r.estado||'—')+(r.estado&&r.estado!=='Pendente'?' · '+T.pc(r.pct):'')+' · '+r.npedidos+' pedido(s) ligado(s)')}catch(e){}}return out}
-   
+
 /* ---------- relatório ---------- */
 function relHTML(R){return '<div class="card"><h3 style="margin-top:0">'+esc(R.titulo)+'</h3><div class="kpis"><div class="card kpi"><b>'+R.importados+'</b>Importados</div><div class="card kpi"><b>'+R.atualizados+'</b>Atualizados</div><div class="card kpi"><b>'+R.ignorados+'</b>Ignorados</div><div class="card kpi al"><b>'+R.rejeitados+'</b>Rejeitados</div></div>'+
  R.secoes.filter(s=>s.l&&s.l.length).map(s=>'<h3>'+esc(s.t)+' ('+s.l.length+')</h3>'+(s.l.length>40?'<details><summary>Mostrar a lista</summary>':'')+s.l.map(x=>'<div class="mv">'+esc(x)+'</div>').join('')+(s.l.length>40?'</details>':'')).join('')+
@@ -204,7 +207,7 @@ function relHTML(R){return '<div class="card"><h3 style="margin-top:0">'+esc(R.t
 function mostrarRel(){const A=$h('hub_area');if(!A||!ULT)return;A.innerHTML=relHTML(ULT);$h('hub_rx').onclick=()=>{ULT=null;A.innerHTML=''};A.scrollIntoView&&A.scrollIntoView({block:'nearest'})}
 function voltarLista(){F=null;const b=document.querySelector('#menu [data-v="'+(ULT&&ULT.pag==='obras'?'obras':'solicitacoes')+'"]');if(b)b.click();else mostrarRel()}
 function fecharFluxo(){F=null;const A=$h('hub_area');if(A)A.innerHTML='';document.querySelectorAll('#hub [data-hub]').forEach(x=>x.classList.remove('on'))}
-
+   
 /* ---------- relação de obras do Sienge (aberta pelo botão da tela Obras) ---------- */
 /* dados do arquivo que ficam gravados na obra. O arquivo do Sienge não traz endereço, cidade, CNPJ nem datas de início/término:
    por isso esses campos NÃO são inventados nem tocados. “Projeto” é o cliente da obra. */
@@ -292,7 +295,7 @@ async function executarObras(){const b=$h('hub_ok'),E1=$h('hub_e');if(!F||!b)ret
   R.nota='Nenhuma obra foi apagada. Correções de código e atualizações mantêm todas as ligações (solicitações, pedidos, funcionários, materiais, ferramentas, malas) e ficam registradas na auditoria. As obras importadas já estão na lista de Obras.';
   ULT=R;toast('Importação de obras concluída.');voltarLista()
  }catch(e){E1.textContent=msg(e)||String(e);E1.classList.remove('hide');b.disabled=false}}
-   
+
 /* ---------- abrir cada importação ---------- */
 const TEXTOS={
  sc:['Importar Solicitações de Compra','Escolha o relatório <b>“Solicitações de Compra”</b> do Sienge, do jeito que ele sai. Pode escolher <b>vários arquivos de uma vez</b>. O sistema lê a requisição, a obra, o solicitante e os materiais, e pula o que já foi importado.'],
@@ -301,7 +304,7 @@ const TEXTOS={
 function abrirFluxo(tipo){const A=$h('hub_area');if(!A)return;
  if(!window.XLSX){toast('A biblioteca de planilhas ainda está carregando. Tente de novo em instantes.');return}
  if(!(tipo==='sc'?SC():tipo==='pc'?PC():true)){toast('A importação de '+(tipo==='sc'?'solicitações':'pedidos')+' não carregou. Recarregue a página.');return}
- F={tipo,dec:{},em:{},E:[],files:[],rows:[],falhas:[],rk:new Map()};ULT=null;
+ F={tipo,dec:{},em:{},vin:{},E:[],files:[],rows:[],falhas:[],rk:new Map()};ULT=null;
  document.querySelectorAll('#hub [data-hub]').forEach(x=>x.classList.toggle('on',x.dataset.hub===tipo));
  A.innerHTML='<div class="card"><h3 style="margin-top:0">'+TEXTOS[tipo][0]+'</h3><p>'+TEXTOS[tipo][1]+'</p><input id="hub_f" type="file" accept=".xlsx,.xls'+(tipo==='ob'?'':',.csv')+'"'+(tipo==='ob'?'':' multiple')+' aria-label="Escolher arquivo"><div id="hub_r"></div></div>';
  $h('hub_f').onchange=e=>lerArquivos([...e.target.files]);A.scrollIntoView&&A.scrollIntoView({block:'nearest'})}
