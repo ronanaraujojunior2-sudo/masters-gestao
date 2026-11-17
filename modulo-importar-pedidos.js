@@ -77,10 +77,12 @@ function achaPedidos(arr,arq){
   const ins=String(g('insumo')).trim(),m=pos.codigo==null?ins.match(/^(\S+)\s+-\s+(.+)$/):null;
   const pick=c=>vz(g(c))?cab[c]:g(c);
   return{linha:t.i+1,arq,v:{numero:pick('numero'),requisicao:pick('requisicao'),fornecedor:pick('fornecedor'),cnpj:pick('cnpj'),data:pick('data'),previsao:pick('previsao'),obs:cab.obs,
-   obraNome:mo2?mo2[2]:ob,obraCodigo:mo2?mo2[1]:'',codigo:pos.codigo!=null?String(g('codigo')).trim():(m?m[1]:''),descricao:m?m[2]:ins,unidade:g('unidade'),quantidade:g('quantidade'),unitario:g('unitario'),total:g('total')}}})}
+   obraNome:mo2?mo2[2]:ob,obraCodigo:mo2?mo2[1]:'',codigo:pos.codigo!=null?String(g('codigo')).trim():(m?m[1]:''),descricao:m?m[2]:ins,insumoOriginal:orig(g('insumo')),unidade:g('unidade'),quantidade:g('quantidade'),unitario:g('unitario'),total:g('total')}}})}
 
 /* ---------- LEITURA DO RELATÓRIO REAL "PEDIDO DE COMPRA" DO SIENGE ---------- */
 const tx=v=>String(v==null?'':v).replace(/\s+/g,' ').trim();
+/* texto do insumo exatamente como veio no pedido (com complemento/especificação em outras linhas da célula), para guardar junto da linha */
+const orig=v=>String(v==null?'':v).replace(/\r/g,'').split('\n').map(x=>x.replace(/\s+/g,' ').trim()).filter(Boolean).join(' | ').slice(0,500);
 const ROTPC=['no pedido','n pedido','data pedido','cotacoes','solicitacoes','solicitacao','nome','endereco','cnpj','telefone','ie','fax','e mail','end de cobranca','vendedor','home page','obra','local entrega','ponto referencia','cond pagamento','frete'];
 function achaPedidoSienge(arr,arq){
  const A=arr||[];let hi=-1,pos={};
@@ -108,7 +110,7 @@ function achaPedidoSienge(arr,arq){
  const reqNums=[...new Set(String(solic).match(/\d+/g)||[])],requisicao=reqNums.length===1?reqNums[0]:tx(solic);
  return its.map(t=>{const r=t.r,ins=tx(r[pos.insumo]),m=ins.match(/^(\S+)\s+-\s+(.+)$/);
   return{linha:t.i+1,arq,v:{numero:tx(numero),requisicao,fornecedor:mf?mf[2]:nomeF,fornecedorCodigo:mf?mf[1]:'',cnpj:tx(cnpj),data:tx(data),previsao,obs,
-   obraNome:mo2?mo2[2]:obra,obraCodigo:mo2?mo2[1]:'',codigo:m?m[1]:'',descricao:m?m[2]:ins,unidade:tx(r[pos.un]),quantidade:r[pos.qtd],
+   obraNome:mo2?mo2[2]:obra,obraCodigo:mo2?mo2[1]:'',codigo:m?m[1]:'',descricao:m?m[2]:ins,insumoOriginal:orig(r[pos.insumo]),unidade:tx(r[pos.un]),quantidade:r[pos.qtd],
    unitario:pos.unit>=0?r[pos.unit]:'',total:r[pos.fin],ajustes:[pos.desc,pos.pdesc,pos.ipi,pos.acr].some(c=>c>=0&&nm(r[c])!==0),totalMerc}}})}
 
 async function ler(file){const n=file.name.toLowerCase();let planilhas;
@@ -117,7 +119,7 @@ async function ler(file){const n=file.name.toLowerCase();let planilhas;
  else throw new Error('Use o arquivo do Sienge em formato .xlsx ou .csv (se ele saiu em PDF, exporte em Excel).');
  for(const a of planilhas){const r=achaPedidoSienge(a,file.name)||achaPedidos(a,file.name);if(r){if(r.length>3000)throw new Error('O arquivo tem mais de 3000 linhas de material. Divida em arquivos menores.');return r}}
  throw new Error('Não reconheci este arquivo como Pedido de Compra do Sienge: não achei a tabela com as colunas de material e quantidade.')}
-
+   
 /* ---------- dados do sistema para conferir a prévia ---------- */
 async function lerTudo(t,c,f){let a=[],i=0;for(;;){let q=sb.from(t).select(c).order('id').range(i,i+999);if(f)q=f(q);const{data,error}=await q;if(error)throw error;a=a.concat(data||[]);if(!data||data.length<1000)break;i+=1000}return a}
 async function contexto(){
@@ -135,6 +137,30 @@ function previsao(dataISO,obraId,fer){let d=new Date(dataISO+'T00:00:00Z'),c=0;
  while(c<5){d=new Date(d.getTime()+86400000);const w=d.getUTCDay(),s=d.toISOString().slice(0,10);
   if(w!==0&&w!==6&&!fer.some(f=>f.nao_util!==false&&f.ativo!==false&&f.data===s&&(!f.obra_id||f.obra_id===obraId)))c++}
  return d.toISOString().slice(0,10)}
+
+/* ---------- LIGAÇÃO linha do pedido → item da requisição ----------
+   Critérios, em conjunto: descrição (que já traz as especificações/complementos do insumo), código do Sienge, unidade,
+   quantidade solicitada/ainda não comprada e a quantidade da linha. A quantidade só ajuda a escolher ENTRE itens que já
+   têm a mesma descrição: sozinha ela nunca prova que dois materiais são iguais. Se não houver segurança, devolve as opções
+   (ops) para o usuário escolher na prévia, em vez de ligar errado ou rejeitar o pedido. */
+const dn=s=>nz(String(s).replace(/[\/\\]+/g,' ')).replace(/\s+/g,' ');
+const restante=(i,x,loc)=>Number(i.quantidade)-((x.comprado||{})[i.id]||0)-((x.usado||{})[i.id]||0)-((loc||{})[i.id]||0);
+function ligarItem(its,L,x,loc){const{d,u,q,cod}=L;
+ let pool=its.filter(i=>dsc(i.materiais.descricao)===dsc(d));
+ if(!pool.length&&cod){pool=its.filter(i=>nz(i.materiais.codigo)===nz(cod));if(pool.length>1){const p2=pool.filter(i=>dn(i.materiais.descricao)===dn(d));if(p2.length)pool=p2}}
+ if(!pool.length)pool=its.filter(i=>dn(i.materiais.descricao)===dn(d));
+ if(!pool.length)return null;
+ const como=it=>{const p=[];if(cod&&nz(it.materiais.codigo)===nz(cod))p.push('código');p.push('descrição');if(dsc(it.materiais.unidade)===dsc(u))p.push('unidade');return p};
+ if(pool.length===1)return{it:pool[0],como:'Automático ('+como(pool[0]).join(', ')+')',obs:dsc(pool[0].materiais.unidade)===dsc(u)?'':'Unidade do pedido ('+u+') diferente da requisição ('+pool[0].materiais.unidade+').'};
+ /* vários itens com a mesma descrição: desempata por código, unidade e, por último, quantidade */
+ const passos=[];let opc=pool;
+ const nar=(f,nome)=>{const p=pool.filter(f);if(p.length&&p.length<pool.length){pool=p;passos.push(nome)}};
+ if(cod)nar(i=>nz(i.materiais.codigo)===nz(cod),'código');
+ if(pool.length>1)nar(i=>dsc(i.materiais.unidade)===dsc(u),'unidade');
+ if(pool.length>1)opc=pool;
+ if(pool.length>1){const n0=pool.length;nar(i=>Math.abs(restante(i,x,loc)-q)<1e-9,'quantidade ainda não comprada');if(pool.length===n0)nar(i=>Math.abs(Number(i.quantidade)-q)<1e-9,'quantidade solicitada')}
+ if(pool.length===1){const it=pool[0];return{it,como:'Automático (descrição, '+passos.join(', ')+')',obs:'Havia mais de um item com esta descrição na requisição; identificado por '+passos.join(' e ')+(passos.some(z=>/quantidade/.test(z))?' (a quantidade foi usada só como critério de desempate entre itens de mesma descrição).':'.')}}
+ return{it:null,ops:opc}}
 
 /* ---------- validação (um pedido por vez) ---------- */
 function validarPedido(g,x){const L=g.rows,ls=L.map(r=>r.linha).join(', '),arq=L[0].arq&&x.multi?' · '+L[0].arq:'';
@@ -158,43 +184,48 @@ function validarPedido(g,x){const L=g.rows,ls=L.map(r=>r.linha).join(', '),arq=L
  if(s.status==='Concluída'||s.status==='Cancelada')return rej('A requisição '+g.req+' está '+s.status.toLowerCase()+'.');
  if(!s.data_aprovacao||s.status==='Aguardando aprovação')return rej('A requisição '+g.req+' ainda não tem a aprovação registrada. Registre a aprovação (ou importe a solicitação já autorizada) e importe de novo.');
  const antes=d1<s.data_aprovacao;   // compra anterior à aprovação formal: NÃO rejeita; pede a autorização emergencial na prévia
- const avisos=[],itens=[],vistos=new Set(),divs=[];let totalGeral=0,semValor=0;
+ const avisos=[],itens=[],divs=[],loc={},amb=[],rep=new Map(),info0=[];let totalGeral=0,semValor=0;
  const its=x.itens.filter(i=>i.solicitacao_id===s.id);
  for(const r of L){const v=r.v,d=String(v.descricao==null?'':v.descricao).trim().replace(/\s+/g,' '),u=String(v.unidade==null?'':v.unidade).trim(),q=num(v.quantidade),cod=String(v.codigo==null?'':v.codigo).trim();
   if(!d)return rej('Linha '+r.linha+': material não informado.');
   if(!u)return rej('Linha '+r.linha+': unidade não informada.');
   if(!(q>0))return rej('Linha '+r.linha+': quantidade inválida (use um número maior que zero).');
-  const dn=s=>nz(String(s).replace(/[\/\\]+/g,' ')).replace(/\s+/g,' ');
-  let it=its.find(i=>dsc(i.materiais.descricao)===dsc(d)&&dsc(i.materiais.unidade)===dsc(u));
-  if(!it&&cod){let c2=its.filter(i=>nz(i.materiais.codigo)===nz(cod));if(c2.length>1)c2=c2.filter(i=>dn(i.materiais.descricao)===dn(d));if(c2.length===1)it=c2[0]}
-  if(!it)it=its.find(i=>dn(i.materiais.descricao)===dn(d)&&dsc(i.materiais.unidade)===dsc(u));
-  if(!it)it=its.find(i=>dn(i.materiais.descricao)===dn(d)&&!vistos.has(i.id))||its.find(i=>dn(i.materiais.descricao)===dn(d));   /* mesmo material com outra unidade */
-  if(!it)return rej('Linha '+r.linha+': o material "'+d+'" não consta na requisição '+g.req+'.');
-  const div=dsc(it.materiais.unidade)!==dsc(u);   /* unidade diferente NÃO rejeita: as duas ficam guardadas e o item vira "Unidade divergente" (sem conversão e sem soma) */
-  if(vistos.has(it.id))return rej('Linha '+r.linha+': o material "'+d+'" aparece mais de uma vez no pedido.');
-  vistos.add(it.id);
-  const falta=Number(it.quantidade)-(x.comprado[it.id]||0)-(x.usado[it.id]||0);
-  if(div)divs.push('"'+d+'": pedido '+nf(q)+' '+u+' · requisição '+nf(it.quantidade)+' '+it.materiais.unidade);
-  else if(q>Math.max(falta,0)){const ex=q-Math.max(falta,0);avisos.push('"'+d+'": quantidade comprada acima do solicitado (excedente de '+ex+' '+u+'). O pedido será importado e o excedente ficará registrado, sem passar de 100% no atendimento.')}
   let vu=vz(v.unitario)?null:num(v.unitario),vt=vz(v.total)?null:num(v.total);
   if((vu!==null&&!(vu>=0))||(vt!==null&&!(vt>=0)))return rej('Linha '+r.linha+': valor inválido.');
+  /* LIGAÇÃO da linha do pedido ao item da requisição (um mesmo material pode aparecer em mais de uma linha: nada é rejeitado nem somado por repetição) */
+  const lig=ligarItem(its,{d,u,q,cod},x,loc);
+  if(!lig)return rej('Linha '+r.linha+': o material "'+d+'" não consta na requisição '+g.req+'.');
+  const it=lig.it,div=it?dsc(it.materiais.unidade)!==dsc(u):false;   /* unidade diferente NÃO rejeita: as duas ficam guardadas e o item vira "Unidade divergente" (sem conversão e sem soma) */
+  if(it){const falta=restante(it,x,loc);
+   if(div)divs.push('"'+d+'": pedido '+nf(q)+' '+u+' · requisição '+nf(it.quantidade)+' '+it.materiais.unidade);
+   else{if(q>Math.max(falta,0)){const ex=q-Math.max(falta,0);avisos.push('"'+d+'": quantidade comprada acima do solicitado (excedente de '+ex+' '+u+'). O pedido será importado e o excedente ficará registrado, sem passar de 100% no atendimento.')}
+    loc[it.id]=(loc[it.id]||0)+q}
+   if(!rep.has(it.id))rep.set(it.id,[]);rep.get(it.id).push({linha:r.linha,q,u,vu,vt,ins:v.insumoOriginal||'',d})}
+  else amb.push({idx:itens.length,linha:r.linha,d,cod,u,q,ops:lig.ops.map(i=>({id:i.id,un:i.materiais.unidade,rot:(i.materiais.codigo?i.materiais.codigo+' - ':'')+i.materiais.descricao+' ('+i.materiais.unidade+') · solicitado '+nf(i.quantidade)+' · já comprado '+nf((x.comprado[i.id]||0)+(x.usado[i.id]||0)+(loc[i.id]||0))}))});
   if(vu===null&&vt===null)semValor++;
   else if(vu!==null&&vt!==null&&!v.ajustes&&Math.abs(vu*q-vt)>0.05)avisos.push('Linha '+r.linha+': valor total ('+mo(vt)+') não confere com quantidade × valor unitário ('+mo(vu*q)+').');
   totalGeral+=vt!==null?vt:(vu!==null?vu*q:0);
-  itens.push({sid:it.id,q,codigo:it.materiais.codigo,descricao:it.materiais.descricao,unidade:it.materiais.unidade,unidade_pedido:u,divergente:div,valor_unitario:vu,valor_total:vt})}
+  itens.push({sid:it?it.id:null,q,codigo:it?it.materiais.codigo:cod,descricao:it?it.materiais.descricao:d,unidade:it?it.materiais.unidade:u,unidade_pedido:u,divergente:div,valor_unitario:vu,valor_total:vt,
+   linha:r.linha,insumo:v.insumoOriginal||'',como:it?lig.como:'',obs:it?lig.obs:''})}
+ /* material repetido no pedido: só vira AVISO quando as linhas são idênticas (mesma quantidade, unidade, valor e texto do insumo); com valores ou quantidades diferentes é só informação. Nada é rejeitado, somado ou descartado. */
+ rep.forEach(a=>{if(a.length<2)return;const dup=a.find((x1,i)=>a.some((y,j)=>j>i&&x1.q===y.q&&dsc(x1.u)===dsc(y.u)&&x1.vu===y.vu&&x1.vt===y.vt&&dsc(x1.ins)===dsc(y.ins)));
+  const ls=a.map(z=>z.linha).join(', ');
+  if(dup)avisos.push('"'+a[0].d+'" aparece em mais de uma linha com a mesma quantidade, unidade e valor (linhas '+ls+'). Confira se não foi repetido por engano; as linhas foram mantidas separadas e nada foi somado.');
+  else info0.push('"'+a[0].d+'" aparece em '+a.length+' linhas do pedido ('+ls+'), com quantidades ou valores diferentes. Cada linha é mantida separada, sem somar.')});
  if(semValor)avisos.push(semValor+' item(ns) sem valor no arquivo.');
  const tm=campo('totalMerc'),tmn=vz(tm)?NaN:num(tm);
  if(Number.isFinite(tmn)&&semValor===0&&Math.abs(tmn-totalGeral)>0.05)avisos.push('A soma dos itens ('+mo(totalGeral)+') não confere com o "Total das mercadorias" do arquivo ('+mo(tmn)+').');
  const fn=x.forn.find(f=>nz(f.nome)===nz(forn)||(!vz(campo('cnpj'))&&String(f.cnpj||'').replace(/\D/g,'')===String(campo('cnpj')).replace(/\D/g,'')));
  if(!fn)avisos.push('Fornecedor "'+forn+'" será cadastrado em Fornecedores.');
  const pa=campo('previsao'),pa1=vz(pa)?null:parseData(pa),calc=previsao(d1,s.obra_id,x.fer);
- const info=[];
+ const info=info0.slice();
  if(pa1&&pa1!==calc)info.push('O arquivo informa entrega até '+fdt(pa1)+'; o sistema calcula '+fdt(calc)+' (5 dias úteis). Vale a data do sistema; a do arquivo fica guardada para consulta.');
- itens.forEach(i=>{if(!i.divergente)x.usado[i.sid]=(x.usado[i.sid]||0)+i.q});
+ itens.forEach(i=>{if(i.sid&&!i.divergente)x.usado[i.sid]=(x.usado[i.sid]||0)+i.q});
+ if(amb.length)info.push(amb.length+' linha(s) deste pedido têm mais de um item parecido na requisição. Escolha abaixo a qual item cada linha corresponde (ou deixe o pedido para depois); nada é ligado sem a sua escolha.');
  if(divs.length)info.push('Unidade divergente (o pedido é importado normalmente; as duas unidades ficam guardadas, sem conversão): '+divs.join('; ')+'. Esses itens não entram no % de atendimento até o administrador MASTERS regularizar.');
- return{...base,estado:'novo',total:totalGeral,nitens:itens.length,fornecedorNovo:!fn,obraArquivo:obraArq,antes:antes?{d:d1,ap:s.data_aprovacao}:null,info:info.join(' '),motivo:avisos.length?'ATENÇÃO: '+avisos.join(' '):'',
+ return{...base,estado:'novo',amb:amb.length?amb:undefined,total:totalGeral,nitens:itens.length,fornecedorNovo:!fn,obraArquivo:obraArq,antes:antes?{d:d1,ap:s.data_aprovacao}:null,info:info.join(' '),motivo:avisos.length?'ATENÇÃO: '+avisos.join(' '):'',
   payload:{linha:L[0].linha,numero:String(g.n),requisicao:String(g.req),fornecedor:String(forn).trim(),cnpj:vz(campo('cnpj'))?null:String(campo('cnpj')).trim(),data:d1,previsao:pa1,obs:vz(campo('obs'))?null:String(campo('obs')).trim(),
-   itens:itens.map(i=>({codigo:i.codigo,descricao:i.descricao,unidade:i.unidade,unidade_pedido:i.unidade_pedido,divergente:i.divergente,quantidade:i.q,valor_unitario:i.valor_unitario,valor_total:i.valor_total}))}}}
+   itens:itens.map(i=>({solicitacao_item_id:i.sid,linha:i.linha,insumo_original:i.insumo||null,vinculo:i.como||null,vinculo_obs:i.obs||null,codigo:i.codigo,descricao:i.descricao,unidade:i.unidade,unidade_pedido:i.unidade_pedido,divergente:i.divergente,quantidade:i.q,valor_unitario:i.valor_unitario,valor_total:i.valor_total}))}}}
 
 function validar(rows,x){const out=[],G=new Map();x.usado={};
  rows.forEach(r=>{const n=vz(r.v.numero)?'':String(r.v.numero).trim(),q=vz(r.v.requisicao)?'':String(r.v.requisicao).trim();
@@ -207,7 +238,7 @@ function validar(rows,x){const out=[],G=new Map();x.usado={};
   if(o.estado==='novo'){if(vis.has(k)){o.estado='rej';o.motivo='O mesmo pedido aparece também no arquivo "'+vis.get(k)+'". Importe só uma vez.';delete o.payload;g.rows.forEach(r=>{})}else vis.set(k,g.rows[0].arq)}
   out.push(o)});
  return out.sort((a,b)=>(a.arq||'').localeCompare(b.arq||'')||a.linha-b.linha)}
-
+   
 /* ---------- autorização emergencial (pedido com data anterior à aprovação formal) ---------- */
 (function(){
  if(!document.getElementById('pc_em_css')){const c=document.createElement('style');c.id='pc_em_css';
@@ -244,6 +275,35 @@ function emLigar(raiz,st,onChange){if(!raiz)return;
   todas[todas.length-1].insertAdjacentElement('afterend',b)}}
 const emLista=d=>((d&&d.anteriores_aprovacao)||[]).map(x=>'Pedido '+x.pedido+' (requisição '+x.requisicao+'): pedido em '+fdt(x.data_pedido)+', aprovação em '+fdt(x.data_aprovacao)+' — '+x.situacao);
 const EM={caixa:emCaixa,erro:emErro,pend:emPend,dados:emDados,ligar:emLigar,lista:emLista,chave:emK};
+
+
+/* ---------- conferência da ligação de itens parecidos (quando o sistema não tem segurança sozinho) ---------- */
+(function(){
+ if(!document.getElementById('pc_vi_css')){const c=document.createElement('style');c.id='pc_vi_css';
+  c.textContent='.hub-t:has(.vi-box){max-height:none}.vi-box{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:12px;margin:8px 0}.vi-av{font-weight:700;margin-bottom:6px;border-left:4px solid var(--amber,#f5a623);padding-left:8px}'+
+  '.vi-box .hint{display:block}.vi-l{display:block;margin:10px 0 0;font-weight:400}.vi-l select{width:100%;margin-top:4px}.vi-o{display:flex;gap:10px;align-items:flex-start;margin-top:12px;cursor:pointer;font-weight:400}.vi-o input{width:22px;height:22px;min-height:22px;flex:0 0 22px;margin-top:2px}';
+  document.head.appendChild(c)}
+})();
+const viK=a=>a&&a.payload?String(a.payload.numero)+'|'+String(a.payload.requisicao):'';
+const viTem=a=>!!(a&&a.estado==='novo'&&a.amb&&a.amb.length);
+const viPula=(a,st)=>!!((st[viK(a)]||{}).pular);
+function viCaixa(a,st){const k=viK(a),v=st[k]||{},e=v.esc||{};
+ return '<div class="vi-box" data-vik="'+esc(k)+'"><div class="vi-av">Conferência: há mais de um item parecido na requisição.</div>'+
+  '<div class="hint">Escolha a que item da requisição cada linha do pedido corresponde. A quantidade, a unidade e o valor de cada linha ficam como vieram no arquivo; nada é somado nem descartado.</div>'+
+  a.amb.map(m=>'<label class="vi-l">Linha '+m.linha+': <b>'+esc((m.cod?m.cod+' - ':'')+m.d)+'</b> · '+esc(m.u)+' · pedido '+nf(m.q)+
+   '<select data-vis="'+m.idx+'"'+(v.pular?' disabled':'')+'><option value="">Escolha o item da requisição…</option>'+m.ops.map(o=>'<option value="'+esc(o.id)+'"'+(e[m.idx]===o.id?' selected':'')+'>'+esc(o.rot)+'</option>').join('')+'</select></label>').join('')+
+  '<label class="vi-o"><input type="checkbox" data-vip="1"'+(v.pular?' checked':'')+'><span>Não importar este pedido agora. Nada é gravado dele; depois você importa de novo.</span></label></div>'}
+function viErro(a,st){if(!viTem(a))return '';const v=st[viK(a)]||{};if(v.pular)return '';const e=v.esc||{},f=a.amb.filter(m=>!e[m.idx]||!m.ops.some(o=>o.id===e[m.idx]));
+ return f.length?'Escolha o item da requisição para a(s) linha(s) '+f.map(m=>m.linha).join(', ')+' (ou marque “Não importar este pedido agora”).':''}
+function viPend(N,st){return N.filter(viTem).map(a=>({a,e:viErro(a,st)})).filter(z=>z.e)}
+function viDados(a,st){if(!a.amb||!a.amb.length)return a.payload;const e=(st[viK(a)]||{}).esc||{};
+ return{...a.payload,itens:a.payload.itens.map((it,i)=>{const m=a.amb.find(z=>z.idx===i);if(!m)return it;const op=m.ops.find(o=>o.id===e[i]);
+  return{...it,solicitacao_item_id:op?op.id:null,vinculo:'Escolhido na conferência',vinculo_obs:'Mais de um item parecido na requisição; ligação escolhida pelo usuário na prévia.'}})}}
+function viLigar(raiz,st,onChange){if(!raiz)return;
+ raiz.querySelectorAll('.vi-box').forEach(bx=>{const k=bx.dataset.vik;st[k]=st[k]||{esc:{}};st[k].esc=st[k].esc||{};
+  bx.querySelectorAll('select[data-vis]').forEach(sl=>sl.onchange=()=>{st[k].esc[sl.dataset.vis]=sl.value;onChange&&onChange()});
+  bx.querySelectorAll('input[data-vip]').forEach(ck=>ck.onchange=()=>{st[k].pular=ck.checked;bx.querySelectorAll('select[data-vis]').forEach(sl=>sl.disabled=ck.checked);onChange&&onChange()})})}
+const VIN={caixa:viCaixa,erro:viErro,pend:viPend,dados:viDados,ligar:viLigar,tem:viTem,pula:viPula,chave:viK};
 
 /* ---------- tela ---------- */
 const lista=(t,L)=>L&&L.length?'<h3>'+t+'</h3>'+L.map(x=>`<div class="mv">${/^Pedido/.test(x.motivo||'')?'':'Linha '+x.linha+': '}${esc(x.motivo)}</div>`).join(''):'';
@@ -304,7 +364,7 @@ const _m6=menu;menu=function(){_m6();poeMenu()};
 new MutationObserver(poeMenu).observe(document.getElementById('menu'),{childList:true});
 new MutationObserver(poeBarra).observe(document.getElementById('view'),{childList:true,subtree:true});
 poeMenu();poeBarra();
-window.__impPedTeste={em:EM,ler,validar,achaPedidos,achaPedidoSienge,previsao,parseData,num,contexto,nz,nk,mo,fdt};
+window.__impPedTeste={em:EM,vin:VIN,ligarItem,ler,validar,achaPedidos,achaPedidoSienge,previsao,parseData,num,contexto,nz,nk,mo,fdt};
 })()}catch(e){window.__impPedErro=e;console.error('Importação de pedidos não carregou:',e);
  const av=()=>{const t=document.getElementById('toast');if(t){t.textContent='Importação de pedidos não carregou: '+e.message;t.classList.add('on')}};
  if(document.readyState==='complete')av();else window.addEventListener('load',av)}
