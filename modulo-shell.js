@@ -105,7 +105,7 @@ async function carregar(){
  if(pi.data&&pi.data.length){const ids=[...new Set(pi.data.map(x=>x.pedido_id))];
   for(let i=0;i<ids.length;i+=100){const r=await um(sb.from('pedidos_compra').select('id,obra_id').in('id',ids.slice(i,i+100)));if(r.data)ped.push(...r.data)}}
  return{sp,sr,tp,tr,fe,fu,ob,es,ma,pi,fm,rc,cm,ped,em:new Date()}}
-  
+
 const quando=d=>{const t=new Date(d),h=new Date(),hh=t.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),dia=x=>x.toDateString();
  const ont=new Date(h);ont.setDate(h.getDate()-1);
  return dia(t)===dia(h)?'hoje, '+hh:dia(t)===dia(ont)?'ontem, '+hh:t.toLocaleDateString('pt-BR')+' '+hh};
@@ -137,7 +137,7 @@ function calc(){
  mv.sort((a,b)=>new Date(b.t)-new Date(a.t));
  return{obras,obrasEsc,abertas,venc,aut,areceber,parc,dv,tf,fe,cnt,fu,ud,abaixo,comSaldo,
   prazo:contar(sp,0,SP),receb:contar(sr,0,SR),mv:mv.slice(0,8),maxAb:Math.max(1,...obrasEsc.map(x=>x.ab))}}
-
+   
 function desenhar(){
  const v=$q('#view');if(!v||cur!=='painel'||!D)return;const c=calc(),d=D;
  const err=(r,n)=>r&&r.erro?'<div class="pn-err" role="status">'+esc(n)+': não foi possível ler ('+esc(r.erro)+').</div>':'';
@@ -167,7 +167,7 @@ function desenhar(){
  const nob=c.obras.length,cad=[['obras','Obras',nob],['funcionarios','Funcionários',d.fu.data?d.fu.data.length:null],['ferramentas','Ferramentas',d.fe.data?d.fe.data.length:null],['materiais','Materiais',d.cm.count==null?null:d.cm.count]].filter(x=>temNav(x[0]));
  const vazio=!nob||!(d.fu.data&&d.fu.data.length);
  const sel=nob>1?'<label>Obra<select id="pn_obra" aria-label="Filtrar o Painel por obra"><option value="">Todas as obras</option>'+c.obras.map(o=>'<option value="'+o.id+'"'+(o.id===OBRA?' selected':'')+'>'+esc(o.nome)+'</option>').join('')+'</select></label>':'';
- v.innerHTML='<div class="pn"><section class="pn-hero"><div class="pn-top"><div><p class="pn-kick">Painel de gestão</p><h1>Painel</h1><p>'Bem-vindo(a), '+esc(me.nome||me.login||'')+' · '+esc(me.perfil_real||me.perfil)+' · '+(OBRA?esc((c.obras.find(o=>o.id===OBRA)||{}).nome||''):(nob===1?esc(c.obras[0].nome):'todas as obras a que você tem acesso'))+'</p></div>'+
+ v.innerHTML='<div class="pn"><section class="pn-hero"><div class="pn-top"><div><p class="pn-kick">Painel de gestão</p><h1>Painel</h1><p>Bem-vindo(a), '+esc(me.nome||me.login||'')+' · '+esc(me.perfil_real||me.perfil)+' · '+(OBRA?esc((c.obras.find(o=>o.id===OBRA)||{}).nome||''):(nob===1?esc(c.obras[0].nome):'todas as obras a que você tem acesso'))+'</p></div>'+
   '<div class="pn-tools">'+sel+'<button type="button" id="pn_atu">Atualizar</button></div></div>'+
   '<div class="pn-stat"><span class="pn-live'+(rt==='SUBSCRIBED'?' on':'')+'" id="pn_rt">'+(rt==='SUBSCRIBED'?'Recebimentos em tempo real: ativo':'Recebimentos em tempo real: indisponível')+'</span><span id="pn_hr">Atualizado às '+d.em.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+'</span></div></section>'+
   (erros?'<div>'+erros+'</div>':'')+
