@@ -167,7 +167,7 @@ function desenhar(){
  const nob=c.obras.length,cad=[['obras','Obras',nob],['funcionarios','Funcionários',d.fu.data?d.fu.data.length:null],['ferramentas','Ferramentas',d.fe.data?d.fe.data.length:null],['materiais','Materiais',d.cm.count==null?null:d.cm.count]].filter(x=>temNav(x[0]));
  const vazio=!nob||!(d.fu.data&&d.fu.data.length);
  const sel=nob>1?'<label>Obra<select id="pn_obra" aria-label="Filtrar o Painel por obra"><option value="">Todas as obras</option>'+c.obras.map(o=>'<option value="'+o.id+'"'+(o.id===OBRA?' selected':'')+'>'+esc(o.nome)+'</option>').join('')+'</select></label>':'';
- v.innerHTML='<div class="pn"><section class="pn-hero"><div class="pn-top"><div><p class="pn-kick">Painel de gestão</p><h1>Painel</h1><p>Bem-vindo(a), '+esc(me.nome||me.login||'')+' · '+esc(me.perfil)+' · '+(OBRA?esc((c.obras.find(o=>o.id===OBRA)||{}).nome||''):(nob===1?esc(c.obras[0].nome):'todas as obras a que você tem acesso'))+'</p></div>'+
+ v.innerHTML='<div class="pn"><section class="pn-hero"><div class="pn-top"><div><p class="pn-kick">Painel de gestão</p><h1>Painel</h1><p>'Bem-vindo(a), '+esc(me.nome||me.login||'')+' · '+esc(me.perfil_real||me.perfil)+' · '+(OBRA?esc((c.obras.find(o=>o.id===OBRA)||{}).nome||''):(nob===1?esc(c.obras[0].nome):'todas as obras a que você tem acesso'))+'</p></div>'+
   '<div class="pn-tools">'+sel+'<button type="button" id="pn_atu">Atualizar</button></div></div>'+
   '<div class="pn-stat"><span class="pn-live'+(rt==='SUBSCRIBED'?' on':'')+'" id="pn_rt">'+(rt==='SUBSCRIBED'?'Recebimentos em tempo real: ativo':'Recebimentos em tempo real: indisponível')+'</span><span id="pn_hr">Atualizado às '+d.em.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+'</span></div></section>'+
   (erros?'<div>'+erros+'</div>':'')+
