@@ -6,7 +6,8 @@
    - para todos os usuários: respeita as permissões liberadas, troca de senha obrigatória e saída automática de quem foi inativado.
    Todas as regras de segurança estão no banco (RLS e funções); esta tela só facilita o uso. */
 try{(function(){
-const PERFIS=[['MASTERS','Administrador'],['ALMOXARIFE','Almoxarife'],['ENCARREGADO','Encarregado'],['FUNCIONARIO','Funcionário (só consulta)']];
+const ASS='ASSISTENTE DE ENGENHARIA';     /* perfil de auxiliares/assistentes de engenharia nas obras (precisa do SQL 22) */
+const PERFIS=[['MASTERS','Administrador'],['ALMOXARIFE','Almoxarife'],['ENCARREGADO','Encarregado'],[ASS,'Assistente de Engenharia'],['FUNCIONARIO','Funcionário (só consulta)']];
 const rot=p=>(PERFIS.find(x=>x[0]===p)||[0,p||'—'])[1];
 const usu=l=>String(l||'').replace(/@masters\.local$/i,'');
 const dt=v=>v?new Date(v).toLocaleDateString('pt-BR'):'—';
@@ -122,7 +123,7 @@ function editar(u){
   const perfil=eu?u.perfil:$('#u_p2').value,s1=eu?s0:$('#u_s').value;
   const obras=[...document.querySelectorAll('.u_o:checked')].map(x=>x.value);
   if(perfil!=='MASTERS'&&s1==='ativo'&&!obras.length)return 'Marque ao menos uma obra para este usuário ficar ativo.';
-  const pg=$('#u_pg').value,pa=$('#u_pa').value,val=x=>x===''?null:x==='sim';
+  const pg=perfil===ASS?'':$('#u_pg').value,pa=perfil===ASS?'':$('#u_pa').value,val=x=>x===''?null:x==='sim';   /* o Assistente não guarda permissões específicas */
   const d={},res=[];   /* d: o que mudou (vai para o banco); res: texto do resumo */
   const nv=(k,rotulo,antes,novo)=>{if((antes||'')!==(novo||'')){d[k]=novo||null;res.push([rotulo,antes||'—',novo||'—'])}};
   nv('nome','Nome',u.nome,nome);if(loginEd)nv('login','Login',usu(u.login),login);
@@ -140,14 +141,14 @@ function editar(u){
   depois(()=>confirmar(u,d,res,mudouSit?s1==='ativo':null,motivo,perfil==='MASTERS'&&u.perfil!=='MASTERS'));
  });
  const ref=()=>{const p=eu?u.perfil:$('#u_p2').value,a=p==='MASTERS';
-  $('#u_ob').classList.toggle('hide',a);$('#u_pm').classList.toggle('hide',a);$('#u_ad').classList.toggle('hide',!a);
+  $('#u_ob').classList.toggle('hide',a);$('#u_pm').classList.toggle('hide',a||p===ASS);$('#u_ad').classList.toggle('hide',!a);
   $('#u_pg_h').textContent='Padrão deste perfil: '+(padraoGravar(p)?'permite.':'não permite.');$('#u_pa_h').textContent='Padrão deste perfil: '+(padraoAlmox(p)?'permite.':'não permite.');
-  $('#u_ph').innerHTML={MASTERS:'<b>Administrador:</b> acesso total, inclusive usuários. Dê só a quem for responsável pelo sistema.',ALMOXARIFE:'<b>Almoxarife:</b> confirma recebimentos, dá saída de material e cadastra.',ENCARREGADO:'<b>Encarregado:</b> cadastra e registra solicitações e pedidos.',FUNCIONARIO:'<b>Funcionário:</b> só consulta.'}[p];
+  $('#u_ph').innerHTML={MASTERS:'<b>Administrador:</b> acesso total, inclusive usuários. Dê só a quem for responsável pelo sistema.',ALMOXARIFE:'<b>Almoxarife:</b> confirma recebimentos, dá saída de material e cadastra.',ENCARREGADO:'<b>Encarregado:</b> cadastra e registra solicitações e pedidos.',[ASS]:'<b>Assistente de Engenharia:</b> consulta as obras vinculadas, registra solicitações de compra e solicita transferências (quem autoriza é o gestor). Não cadastra, não importa, não recebe material e não administra usuários.',FUNCIONARIO:'<b>Funcionário:</b> só consulta.'}[p];
   $('#u_mo').classList.toggle('hide',eu||$('#u_s').value!=='inativo'||s0==='inativo')};
  $('#u_p2').onchange=ref;$('#u_s').onchange=ref;ref();
  if($('#u_pw'))$('#u_pw').onclick=()=>{$('#dlg').close();depois(()=>senha(u))};
  $('#u_hi').onclick=()=>{$('#dlg').close();depois(()=>historico(u))}}
-   
+
 /* confirmação do resumo das alterações; depois grava */
 function confirmar(u,d,res,mudouAtivo,motivo,viraAdm){
  const lista=res.map(r=>`<li><b>${esc(r[0])}:</b> ${esc(r[1])} → ${esc(r[2])}</li>`).join('');
@@ -230,18 +231,54 @@ async function historico(u){
  const box=$('#dlg>div');if(!box)return;
  if(error){box.innerHTML='<div class="err">'+esc(msg(error))+'</div>';return}
  box.innerHTML=(data||[]).length?(data||[]).map(r=>`<div class="mv"><b>${esc(OPS[r.operacao]||r.operacao)}</b> — ${esc(dth(r.em))}<br><span class="hint">Por: ${esc(r.usuario_id?quem(r.usuario_id):'sistema')}</span><div>${detalhe(r)}</div></div>`).join(''):'<p class="empty">Ainda não há alterações registradas para este usuário.</p>'}
-
-/* ---------- servidor de contas (Edge Function "admin-usuarios") ---------- */
+   /* ---------- servidor de contas (Edge Function "admin-usuarios") ---------- */
+const FN='admin-usuarios';
+const urlSb=()=>String((sb&&sb.supabaseUrl)||(typeof SB_URL!=='undefined'?SB_URL:'')).replace(/\/$/,'');
+/* Descobre a causa REAL de uma falha de comunicação. É um GET simples, sem cabeçalhos extras (não depende de CORS):
+   rede = sem internet ou Supabase fora do ar · naopublicada = a função não existe neste projeto ·
+   erro_servidor = existe, mas falhou ao iniciar · noar = publicada e respondendo (inclui o portão exigindo login). */
+async function sonda(){
+ let ctl=null,tm=null;try{ctl=new AbortController();tm=setTimeout(()=>ctl.abort(),8000)}catch(x){}
+ let r;try{r=await fetch(urlSb()+'/functions/v1/'+FN,{method:'GET',cache:'no-store',signal:ctl?ctl.signal:undefined})}catch(e){return{estado:'rede'}}finally{if(tm)clearTimeout(tm)}
+ let j=null;try{j=await r.json()}catch(x){}
+ if(r.status===404||(j&&j.code==='NOT_FOUND'))return{estado:'naopublicada',status:r.status};
+ if(r.status>=500)return{estado:'erro_servidor',status:r.status};
+ return{estado:'noar',status:r.status,versao:j&&j.versao}}
+const MSG={
+ rede:'Sem conexão com o Supabase. Confira a internet do aparelho e tente de novo; nada será duplicado.',
+ naopublicada:'O servidor de contas não está publicado neste projeto Supabase: a função "admin-usuarios" não existe (o Supabase respondeu "função não encontrada"). Não é problema de internet nem do seu login. É uma publicação feita uma única vez, em Supabase → Edge Functions → Deploy a new function → Via Editor, com o nome exatamente admin-usuarios. Depois dela, criar usuários não exige mais nada no painel.',
+ erro_servidor:'A função "admin-usuarios" está publicada, mas falhou ao iniciar (erro do servidor). Em Supabase → Edge Functions → admin-usuarios → Logs veja o motivo e publique o código atual de novo.',
+ cors:'A função "admin-usuarios" está publicada, mas o navegador bloqueou a chamada (CORS). Publique a versão atual do código da função e tente de novo.',
+ portao:'O Supabase recusou a sessão antes de chegar na função (Verify JWT). Saia e entre de novo; se continuar, desligue "Verify JWT" da função admin-usuarios (ela mesma já confere o login e se você é o administrador).',
+ tempo:'O servidor de contas não respondeu em 30 segundos. Tente de novo: nada será duplicado.'};
 async function fn(body){
- let r;try{r=await sb.functions.invoke('admin-usuarios',{body})}catch(e){r={error:e}}
- if(r&&r.error){const c=r.error.context;let j=null;
+ let r,tm;
+ try{r=await Promise.race([sb.functions.invoke(FN,{body}),new Promise((_,rej)=>{tm=setTimeout(()=>rej(Object.assign(new Error('tempo'),{tempo:true})),30000)})])}catch(e){r={error:e}}finally{if(tm)clearTimeout(tm)}
+ if(r&&r.error){const e=r.error,c=e.context;let j=null;
   try{if(c&&typeof c.json==='function')j=await c.json()}catch(x){}
-  if(j&&j.erro)return Object.assign({ok:false},j);
-  if(c&&c.status===404)return{ok:false,semFn:true,erro:'A função "admin-usuarios" ainda não foi publicada no Supabase. Siga o passo da Edge Function no guia de instalação.'};
-  if(c&&(c.status===401||c.status===403))return{ok:false,erro:'O servidor de contas recusou o acesso. Entre no sistema de novo. Se continuar, confira o passo "Verify JWT" do guia.'};
-  const t=String((r.error&&r.error.message)||'');
-  return{ok:false,rede:true,erro:/fetch|network|failed to send|load failed/i.test(t)?'Sem conexão com o servidor de contas. Confira a internet e tente de novo; nada será duplicado.':'Não foi possível falar com o servidor de contas ('+t+').'}}
+  if(j&&j.erro)return Object.assign({ok:false},j);                          /* a função respondeu com a própria mensagem */
+  if(e.tempo)return{ok:false,causa:'tempo',rede:true,erro:MSG.tempo};
+  const st=c&&c.status;
+  if(st===401||st===403)return{ok:false,causa:'portao',erro:MSG.portao};
+  if(st>=500)return{ok:false,causa:'erro_servidor',erro:MSG.erro_servidor+' (HTTP '+st+')'};
+  const d=await sonda();                                                    /* sem resposta útil: descobre o que de fato aconteceu */
+  if(d.estado==='naopublicada'||st===404)return{ok:false,causa:'naopublicada',semFn:true,erro:MSG.naopublicada};
+  if(d.estado==='rede')return{ok:false,causa:'rede',rede:true,erro:MSG.rede};
+  if(d.estado==='erro_servidor')return{ok:false,causa:'erro_servidor',erro:MSG.erro_servidor+' (HTTP '+d.status+')'};
+  return{ok:false,causa:'cors',erro:MSG.cors+' ['+String((e&&e.message)||'').slice(0,80)+']'}}
  return (r&&r.data)||{ok:false,erro:'Resposta vazia do servidor de contas.'}}
+/* lista de conferência mostrada quando a verificação falha: o que está de pé e o que falta */
+async function diagnostico(){
+ const L=[];const li=(ok,t)=>L.push('<li>'+(ok===true?'✔ ':ok===false?'✖ ':'• ')+esc(t)+'</li>');
+ const d=await sonda();
+ li(d.estado!=='rede','Internet e Supabase: '+(d.estado==='rede'?'sem resposta':'respondendo'));
+ li(d.estado==='noar'||d.estado==='erro_servidor','Função "admin-usuarios" publicada: '+(d.estado==='naopublicada'?'NÃO (não encontrada neste projeto)':d.estado==='rede'?'não deu para conferir':'sim'+(d.versao?' (versão '+d.versao+')':'')));
+ if(d.estado==='noar'){
+  let p=null;try{const x=await sb.functions.invoke(FN,{body:{acao:'ping'}});p=x&&x.data}catch(e){}
+  if(p&&p.ok){li(p.admin===true,'Sua sessão é de administrador MASTERS: '+(p.admin?'sim':'não'));
+   if(p.admin){li(p.sql16===true,'SQL 16 (usuários pelo sistema) instalado: '+(p.sql16?'sim':'NÃO'));li(p.sql22===true,'SQL 22 (perfil Assistente de Engenharia) instalado: '+(p.sql22?'sim':'NÃO — rode o SQL 22'))}}
+  else li(false,'Chamada de teste (ping) à função: sem resposta útil')}
+ return '<ul class="usu-h">'+L.join('')+'</ul>'}
 
 function avisoSync(aviso,u){
  modal('Atenção: sincronização pendente','<p>'+esc(aviso)+'</p><p class="hint">O que foi salvo no sistema continua salvo. A conta de acesso só precisa ser acertada.</p>','Tentar sincronizar agora',async()=>{
@@ -250,14 +287,16 @@ function avisoSync(aviso,u){
 async function verificar(){
  modal('Verificar sincronização','<p class="sub">Conferindo as contas de acesso e os perfis…</p>',null);
  const r=await fn({acao:'verificar'});const box=$('#dlg>div');if(!box)return;
- if(!r.ok){box.innerHTML='<div class="err">'+esc(r.erro||'Não foi possível verificar.')+'</div>';return}
+ if(!r.ok){box.innerHTML='<div class="err">'+esc(r.erro||'Não foi possível verificar.')+'</div><p class="hint">Conferindo o que está funcionando…</p><div id="vf_dg"></div><div class="acts"><button type="button" class="sec" id="vf_re">Tentar de novo</button></div>';
+  const re=$('#vf_re');if(re)re.onclick=()=>{$('#dlg').close();depois(verificar)};
+  const h=await diagnostico();const g=$('#vf_dg');if(g){g.innerHTML=h;const hh=g.previousElementSibling;if(hh)hh.remove()}return}
  const dv=r.divergencias||[];
  box.innerHTML='<p>'+r.total_perfis+' cadastro(s) no sistema · '+r.total_contas+' conta(s) de acesso.</p>'+(dv.length?
   '<p>Foram encontradas <b>'+dv.length+'</b> diferença(s):</p><ul class="usu-h">'+dv.map(x=>'<li><b>'+esc(x.nome||x.login||'(sem nome)')+'</b> ('+esc(x.login||'—')+'): '+esc(x.texto)+' '+(x.corrigivel?'<button type="button" class="mini" data-vs="'+esc(x.id)+'">Corrigir</button>':'<span class="hint">precisa de conferência manual</span>')+'</li>').join('')+'</ul>':
   '<p><b>Tudo em ordem:</b> cada usuário tem a sua conta de acesso, com o mesmo login e a mesma situação (ativo ou bloqueado).</p>');
  box.querySelectorAll('[data-vs]').forEach(b=>b.onclick=async()=>{b.disabled=true;const x=await fn({acao:'sincronizar',id:b.dataset.vs});
   if(!x.ok){toast(x.erro);b.disabled=false;return}toast('Corrigido.');$('#dlg').close();depois(verificar)})}
-   
+
 /* ---------- novo usuário ---------- */
 let criando=false;
 function novo(){
@@ -288,17 +327,18 @@ function novo(){
   if(perfil!=='MASTERS'&&sit0==='ativo'&&!obras.length)return 'Marque ao menos uma obra para a conta ficar ativa.';
   const val=x=>x===''?null:x==='sim';
   const d={nome,login,email:email||null,matricula:$('#n_m').value.trim()||null,cargo:$('#n_c').value.trim()||null,perfil,obras,situacao:sit0,
-   perm_gravar:perfil==='MASTERS'?null:val($('#n_pg').value),perm_almoxarifado:perfil==='MASTERS'?null:val($('#n_pa').value),confirmar_admin:perfil==='MASTERS'?'true':undefined};
+   perm_gravar:perfil==='MASTERS'||perfil===ASS?null:val($('#n_pg').value),perm_almoxarifado:perfil==='MASTERS'||perfil===ASS?null:val($('#n_pa').value),confirmar_admin:perfil==='MASTERS'?'true':undefined};
   criando=true;let r;try{r=await fn({acao:'criar',dados:d})}finally{criando=false}
   if(!r.ok){
    if(r.usuario_id){depois(()=>{modal('Atenção: cadastro criado, falta acertar a conta de acesso','<p>'+esc(r.erro)+'</p><p class="hint">Os dados que você preencheu foram salvos. Nada será duplicado.</p>',null);telaUsuarios()});return}
+   if(perfil===ASS&&/perfil/i.test(r.erro||''))return r.erro+' (Se o SQL 22 ainda não foi executado no Supabase, execute-o antes de criar este perfil.)';
    return r.erro||'Não foi possível criar o usuário. Os dados preenchidos foram mantidos; tente de novo.'}
   depois(()=>{mostrarSenha('Usuário criado: '+esc(nome),r.login,r.senha_provisoria,
    '<ul class="usu-h"><li>✔ Conta de acesso criada e confirmada no Supabase Auth</li><li>✔ Perfil, permissões e obras gravados</li><li>✔ Sincronização conferida</li></ul>');telaUsuarios()})});
  const ref=()=>{const p=$('#n_p').value,a=p==='MASTERS';
-  $('#n_ob').classList.toggle('hide',a||!p);$('#n_pm').classList.toggle('hide',a||!p);$('#n_ad').classList.toggle('hide',!a);
+  $('#n_ob').classList.toggle('hide',a||!p);$('#n_pm').classList.toggle('hide',a||!p||p===ASS);$('#n_ad').classList.toggle('hide',!a);
   if(p){$('#n_pg_h').textContent='Padrão deste perfil: '+(padraoGravar(p)?'permite.':'não permite.');$('#n_pa_h').textContent='Padrão deste perfil: '+(padraoAlmox(p)?'permite.':'não permite.')}
-  $('#n_ph').innerHTML={MASTERS:'<b>Administrador:</b> acesso total, inclusive usuários. Dê só a quem for responsável pelo sistema.',ALMOXARIFE:'<b>Almoxarife:</b> confirma recebimentos, dá saída de material e cadastra.',ENCARREGADO:'<b>Encarregado:</b> cadastra e registra solicitações e pedidos.',FUNCIONARIO:'<b>Funcionário:</b> só consulta.'}[p]||''};
+  $('#n_ph').innerHTML={MASTERS:'<b>Administrador:</b> acesso total, inclusive usuários. Dê só a quem for responsável pelo sistema.',ALMOXARIFE:'<b>Almoxarife:</b> confirma recebimentos, dá saída de material e cadastra.',ENCARREGADO:'<b>Encarregado:</b> cadastra e registra solicitações e pedidos.',[ASS]:'<b>Assistente de Engenharia:</b> consulta as obras vinculadas, registra solicitações de compra e solicita transferências (quem autoriza é o gestor). Não cadastra, não importa, não recebe material e não administra usuários.',FUNCIONARIO:'<b>Funcionário:</b> só consulta.'}[p]||''};
  $('#n_p').onchange=ref;ref()}
 
 /* ---------- menu (só o administrador) ---------- */
@@ -314,6 +354,9 @@ const assin=u=>[u.perfil,u.perm_gravar,u.perm_almoxarifado,u.ativo,u.excluido_em
 /* o banco decide de verdade; aqui a tela só mostra ou esconde botões conforme perfil + permissões específicas */
 function aplicaPerfil(){if(!me||me.__ui)return;me.__ui=1;me.perfil_real=me.perfil;me.__sig=assin(me);
  if(me.perfil==='MASTERS')return;
+ /* Assistente de Engenharia: nas telas conta como "só consulta" (nada de cadastrar, importar, receber ou autorizar);
+    me.assistente libera só o que ele pode: solicitar compra e solicitar transferência. O banco decide de verdade. */
+ if(me.perfil===ASS){me.assistente=true;me.perfil='FUNCIONARIO';return}
  const g=me.perm_gravar!=null?me.perm_gravar:padraoGravar(me.perfil),a=me.perm_almoxarifado!=null?me.perm_almoxarifado:padraoAlmox(me.perfil);
  me.perfil=a?'ALMOXARIFE':g?'ENCARREGADO':'FUNCIONARIO'}
 const _msgU=msg;msg=function(e){const t=((e&&e.message)||'')+' '+((e&&e.code)||'');
