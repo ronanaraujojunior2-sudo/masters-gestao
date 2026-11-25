@@ -50,7 +50,7 @@ function detalhe(r){
   const st=i.semPct?'<span class="chip red">Unidade divergente</span>':i.comp===0?'<span class="chip red">Pendente</span>':i.pend>0?'<span class="chip">Parcial</span>':'<span class="chip blue">Comprado</span>';
   return '<tr><td><b>'+esc(i.descricao)+'</b><span class="atd-p">'+esc(i.codigo||'')+'</span></td><td>'+esc(i.unidade)+'</td><td>'+nf(i.sol)+'</td><td>'+(i.semPct&&i.comp===0?'—':nf(i.comp))+(i.exc>0?'<span class="atd-p">excedente: '+nf(i.exc)+'</span>':'')+'</td><td><b>'+(i.semPct?'—':nf(i.pend))+'</b></td><td>'+(i.semPct?'sem cálculo':pc(i.pct))+'<br>'+st+'</td><td>'+(i.pedidos.length?i.pedidos.length+' pedido(s)':'—')+ps+'</td></tr>'}).join('');
  const un=r.unidades.length>1?'<div class="atd-n">Unidades diferentes não são somadas. Atendimento por unidade: '+r.unidades.map(g=>esc(g.un||'sem unidade')+' '+pc(g.pct)).join(' · ')+'.</div>':'';
- return '<div class="atd-n">'+r.npedidos+' pedido(s) vinculado(s). Itens pendentes aparecem primeiro. <b>Comprado não é recebido:</b> o estoque só aumenta quando o almoxarife confirma o recebimento.</div>'+un+
+ return '<div class="atd-n">'+r.npedidos+' pedido(s) vinculado(s). Itens pendentes aparecem primeiro.'+(window.__recAtivo&&window.__recAtivo()===false?'':' <b>Comprado não é recebido:</b> o estoque só aumenta quando o almoxarife confirma o recebimento.')+'</div>'+un+
   '<div class="wrap"><table><thead><tr><th>Material</th><th>Unid.</th><th>Solicitado</th><th>Comprado</th><th>Pendente</th><th>Atendimento</th><th>Pedidos</th></tr></thead><tbody>'+lin+'</tbody></table></div>'}
 
 function aplicar(){

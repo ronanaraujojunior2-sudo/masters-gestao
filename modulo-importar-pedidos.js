@@ -310,7 +310,7 @@ const lista=(t,L)=>L&&L.length?'<h3>'+t+'</h3>'+L.map(x=>`<div class="mv">${/^Pe
 const relatorio=d=>`<div class="kpis"><div class="card kpi"><b>${d.importados}</b>Pedidos importados</div><div class="card kpi"><b>${d.itens||0}</b>Itens importados</div><div class="card kpi"><b>${d.ignorados}</b>Ignorados</div><div class="card kpi al"><b>${d.rejeitados}</b>Rejeitados</div></div>`+(emLista(d).length?'<h3>Pedidos anteriores à aprovação formal</h3>'+emLista(d).map(x=>'<div class="mv">'+esc(x)+'</div>').join('')+'<p class="hint">A aprovação formal das requisições não foi alterada.</p>':'')+lista('Pedidos ignorados',d.detalhes.ignorados)+lista('Pedidos rejeitados',d.detalhes.rejeitados);
 
 function tela(){cur='imp_ped';mark();const v=$('#view');
- v.innerHTML=`<h1>Importar Pedido de Compra</h1><p class="sub">Nada é gravado antes da sua confirmação. A importação não dá entrada no estoque: o estoque só muda quando o almoxarife confirma o recebimento.</p>
+ v.innerHTML=`<h1>Importar Pedido de Compra</h1><p class="sub">Nada é gravado antes da sua confirmação. ${(window.__recAtivo&&window.__recAtivo()===false)?'O controle de recebimento e de entrada de materiais é feito no Sienge.':'A importação não dá entrada no estoque: o estoque só muda quando o almoxarife confirma o recebimento.'}</p>
  <div class="card"><h3 style="margin-top:0">Passo 1: escolha o arquivo</h3>
  <p>Use o relatório de <b>Pedido de Compra</b> exportado do Sienge (Excel ou CSV), do jeito que ele sai. Você pode escolher <b>vários arquivos de uma vez</b>.</p>
  <p class="hint">A requisição do pedido precisa estar cadastrada e aprovada (use antes “Importar solicitações”).</p>
@@ -342,7 +342,7 @@ async function processar(files){const R=$('#pc_r');if(!files||!files.length)retu
    const b=$('#pc_ok');b.disabled=true;
    const{data,error}=await sb.rpc('importar_pedidos',{p_arquivo:files.length>1?files.length+' arquivos ('+files[0].name+', ...)':files[0].name,p_dados:N.map(a=>a.antes?{...a.payload,emergencia:emDados(a,EMST)}:a.payload),p_rejeitados:J.map(env),p_ignorados:I.map(env)});
    if(error){b.disabled=false;const e=$('#pc_e');e.textContent=msg(error);e.classList.remove('hide');return}
-   cache={};R.innerHTML='<div class="card"><h3 style="margin-top:0">Resultado da importação</h3>'+relatorio(data)+'<p class="hint">Confira em “Solicitações e pedidos”. O material comprado ainda não é material recebido: o recebimento é confirmado em “Receber materiais”.</p></div>';toast('Importação concluída.')}
+   cache={};R.innerHTML='<div class="card"><h3 style="margin-top:0">Resultado da importação</h3>'+relatorio(data)+'<p class="hint">Confira em “Solicitações e pedidos”.'+((window.__recAtivo&&window.__recAtivo()===false)?'':' O material comprado ainda não é material recebido: o recebimento é confirmado em “Receber materiais”.')+'</p></div>';toast('Importação concluída.')}
  }catch(e){R.innerHTML='<div class="err">'+esc(e.message||msg(e))+'</div>'}}
 
 function abrir(){tela();const f=document.getElementById('pc_f');if(f)f.click()}

@@ -12,6 +12,7 @@ const hojeM=()=>new Date().toLocaleDateString('sv-SE',{timeZone:'America/Manaus'
 const uid=()=>(window.crypto&&crypto.randomUUID)?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:(r&3|8)).toString(16)});
 const pode=()=>!!me&&(me.perfil==='MASTERS'||(me.perm_almoxarifado!=null?me.perm_almoxarifado===true:me.perfil==='ALMOXARIFE'));
 const adm=()=>!!me&&me.perfil==='MASTERS';
+const REC=()=>!(window.__recAtivo&&window.__recAtivo()===false);   /* chave recebimento_compras (modulo-solicitacoes-simples.js): desativado = nenhuma tela, botão ou assinatura de recebimento */
 const SIT_CHIP={'Com divergência':'red','Recebido totalmente':'blue','Recebimento parcial':'blue'};
 const chip=s=>'<span class="chip '+(SIT_CHIP[s]||'')+'">'+esc(s)+'</span>';
 
@@ -75,7 +76,7 @@ async function carregarSec(id){const s=SEC.get(id);if(!s||!document.body.contain
 
 function aplicar(){
  const v=document.getElementById('view'),h=v&&v.querySelector('h1');
- if(!h||h.textContent.trim()!=='Solicitações e pedidos'){if(canal)soltar();return}
+ if(!h||h.textContent.trim()!=='Solicitações e pedidos'||!REC()){if(canal)soltar();return}
  estilo();assinar();
  v.querySelectorAll('tr.atd-d').forEach(d=>{const w=d.querySelector('.atd-w');if(!w||w.querySelector('.rc-sec'))return;
   const tr=d.previousElementSibling,o=tr&&tr.querySelector('[data-o]');if(!o)return;const id=o.dataset.o;
@@ -181,7 +182,7 @@ document.addEventListener('click',e=>{
  const s=e.target.closest('[data-rc-est]');if(s){e.preventDefault();abrirEstorno(s.dataset.rcEst,s.dataset.rcSol)}});
 
 /* o módulo de status chama isto para pôr o botão na coluna "Status do recebimento" */
-window.__rcBotao=(id,r)=>pode()&&r&&(r.situacao==='Aguardando recebimento'||r.situacao==='Recebimento parcial'||r.situacao==='Com divergência')?'<button type="button" class="mini rc-reg" data-rc-open="'+id+'">Registrar recebimento</button>':'';
+window.__rcBotao=(id,r)=>REC()&&pode()&&r&&(r.situacao==='Aguardando recebimento'||r.situacao==='Recebimento parcial'||r.situacao==='Com divergência')?'<button type="button" class="mini rc-reg" data-rc-open="'+id+'">Registrar recebimento</button>':'';
 new MutationObserver(aplicar).observe(document.getElementById('view'),{childList:true,subtree:true});
 aplicar();
 window.__rcTeste={secHtml,abrirReceber,atualizar,pode,SEC};

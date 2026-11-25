@@ -22,6 +22,7 @@ function estilo(){if(document.getElementById('pz_css'))return;const s=document.c
  document.head.appendChild(s)}
 
 /* ---------- textos ---------- */
+const REC=()=>!(window.__recAtivo&&window.__recAtivo()===false);   /* chave recebimento_compras: desativado = sem a coluna, o filtro e o bloco de recebimento */
 function chipPrazo(r){const s=r.situacao;
  if(s==='Prazo vencido')return '<span class="chip red">Prazo vencido</span>';
  if(s==='Dentro do prazo'||s==='Regularizado')return '<span class="chip blue">'+x(s)+'</span>';
@@ -74,7 +75,7 @@ async function lerReceb(ids){
 async function carregar(ids){
  const[p,r,h]=await Promise.all([
   ler('solicitacoes_prazo','id,situacao,data_aprovacao,data_prazo,decorridos,restantes,atraso,regularizado_em',ids,'id','id'),
-  lerReceb(ids),
+  REC()?lerReceb(ids):Promise.resolve([]),
   ler('solicitacao_prazo_hist','id,solicitacao_id,evento,detalhe,em',ids,'solicitacao_id','em')]);
  const P={},R={},H={};p.forEach(a=>P[a.id]=a);r.forEach(a=>R[a.id]=a);h.forEach(a=>(H[a.solicitacao_id]=H[a.solicitacao_id]||[]).push(a));
  return{P,R,H}}
@@ -91,7 +92,7 @@ function filtros(tb,dp,dr){
  const opts=(ordem,c)=>'<option value="">Todas</option>'+ordem.filter(v=>c[v]).map(v=>'<option value="'+x(v)+'">'+x(v)+' ('+c[v]+')</option>').join('');
  const bar=document.createElement('div');bar.className='pz-bar';
  bar.innerHTML='<label>Prazo <select data-pzs="p">'+opts(['Aguardando autorização','Dentro do prazo','Prazo vencido','Regularizado','Cancelada'],cont(dp))+'</select></label>'+
-  '<label>Recebimento <select data-pzs="r">'+opts(['Não comprado','Aguardando recebimento','Recebimento parcial','Recebido totalmente','Com divergência','Cancelada'],cont(dr))+'</select></label>';
+  (REC()?'<label>Recebimento <select data-pzs="r">'+opts(['Não comprado','Aguardando recebimento','Recebimento parcial','Recebido totalmente','Com divergência','Cancelada'],cont(dr))+'</select></label>':'');
  bar.querySelectorAll('select').forEach(sel=>sel.onchange=()=>{const E=ESTADO.get(tb);E.f[sel.dataset.pzs]=sel.value;filtrar(tb)});
  return bar}
 
@@ -103,7 +104,7 @@ function detalhe(tb){
   const w=nx.querySelector('.atd-w');if(!w||w.querySelector('.pz-det')||!m.carregado)return;
   const d=document.createElement('div');d.className='pz-det';
   d.innerHTML='<div><h4>Status do prazo</h4><div class="pz-c">'+prazoResumo(m.p)+'</div><h4 style="margin-top:10px">Histórico do prazo</h4>'+histLista(m.h)+'</div>'+
-   '<div><h4>Status do recebimento</h4><div class="pz-c">'+recebResumo(m.r)+'</div><p class="hint" style="margin:8px 0 0">O prazo e o recebimento são independentes: receber o material não apaga um atraso, e um prazo vencido não quer dizer que o material não chegou.</p></div>';
+   (REC()?'<div><h4>Status do recebimento</h4><div class="pz-c">'+recebResumo(m.r)+'</div><p class="hint" style="margin:8px 0 0">O prazo e o recebimento são independentes: receber o material não apaga um atraso, e um prazo vencido não quer dizer que o material não chegou.</p></div>':'');
   w.insertBefore(d,w.firstChild)})}
 
 function aplicar(){
@@ -118,10 +119,11 @@ function aplicar(){
  tb.dataset.pz='1';estilo();
  const thSit=ths[iSit];thSit.classList.add('pz-hide');
  const th1=Object.assign(document.createElement('th'),{textContent:'Status do prazo'}),th2=Object.assign(document.createElement('th'),{textContent:'Status do recebimento'});
+ if(!REC())th2.classList.add('pz-hide');   /* sem recebimento: a coluna existe só por posição e não aparece */
  hr.insertBefore(th1,thSit);hr.insertBefore(th2,thSit);
  const mapa=new Map();
  rows.forEach(tr=>{const id=tr.querySelector('[data-o]').dataset.o,old=tr.children[iSit],t1=document.createElement('td'),t2=document.createElement('td');
-  t1.innerHTML=t2.innerHTML='…';if(old)old.classList.add('pz-hide');
+  t1.innerHTML=t2.innerHTML='…';if(old)old.classList.add('pz-hide');if(!REC())t2.classList.add('pz-hide');
   tr.insertBefore(t1,old||null);tr.insertBefore(t2,old||null);mapa.set(id,{tr,t1,t2,carregado:false})});
  ESTADO.set(tb,{mapa,f:{p:'',r:''}});
  carregar([...mapa.keys()]).then(({P,R,H})=>{
@@ -139,7 +141,7 @@ function aplicar(){
   mapa.forEach(m=>{m.t1.textContent=m.t2.textContent='—';m.t1.title=m.t2.title='Não foi possível carregar: '+(e&&e.message||e)});
   v.querySelectorAll('.pz-bar,.pz-aviso').forEach(y=>y.remove());
   const av=document.createElement('div');av.className='pz-aviso';
-  av.textContent=falta?'Os status de prazo e de recebimento ainda não estão ativos: falta instalar o SQL 20 no Supabase.':'Não foi possível carregar os status de prazo e de recebimento agora. Atualize a página.';
+  av.textContent=falta?'Os status de prazo'+(REC()?' e de recebimento':'')+' ainda não estão ativos: falta instalar o SQL 20 no Supabase.':'Não foi possível carregar os status de prazo'+(REC()?' e de recebimento':'')+' agora. Atualize a página.';
   (tb.closest('.card')||tb.parentElement).insertAdjacentElement('beforebegin',av);
   /* sem os dados novos, a coluna antiga volta a aparecer */
   thSit.classList.remove('pz-hide');mapa.forEach(m=>{const o=m.t2.nextElementSibling;if(o)o.classList.remove('pz-hide')});

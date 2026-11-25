@@ -76,6 +76,9 @@ let D=null,OBRA='',seq=0,canal=null,tRt=null,rt='';
 const SP=[['Aguardando autorização','s4'],['Dentro do prazo','s1'],['Prazo vencido','s5'],['Regularizado','s3']];
 const SR=[['Não comprado','s4'],['Aguardando recebimento','s2'],['Recebimento parcial','s3'],['Recebido totalmente','s1'],['Com divergência','s5']];
 const temNav=v=>!!document.querySelector('#menu .nav[data-v="'+v+'"]');
+/* chave "recebimento_compras" (modulo-solicitacoes-simples.js): com o recebimento de materiais desativado, o Painel não lê nem mostra nada de recebimento */
+const REC=()=>!(window.__recAtivo&&window.__recAtivo()===false);
+const VAZIO={data:[]};
 function esperar(sel,ms,fn){const t0=Date.now();(function p(){const e=document.querySelector(sel);if(e)return fn(e);if(Date.now()-t0<ms)setTimeout(p,150)})()}
 function ir(v,filtro,depois){const b=document.querySelector('#menu .nav[data-v="'+v+'"]');if(!b)return;b.click();
  if(filtro)Object.keys(filtro).forEach(k=>esperar('[data-pzs="'+k+'"]',5000,s=>{if([...s.options].some(o=>o.value===filtro[k])){s.value=filtro[k];s.dispatchEvent(new Event('change',{bubbles:true}))}}));
@@ -89,7 +92,7 @@ const TCOLS='id,tipo,status,obra_origem_id,obra_destino_id,obra_origem_nome,obra
 async function carregar(){
  const [sp,sr,tp,tr,fe,fu,ob,es,ma,pi,fm,rc,cm]=await Promise.all([
   todos('solicitacoes_prazo','id,obra_id,numero_sienge,situacao,atraso'),
-  todos('solicitacoes_recebimento','id,obra_id,situacao'),
+  REC()?todos('solicitacoes_recebimento','id,obra_id,situacao'):Promise.resolve(VAZIO),
   um(sb.from('transferencias').select(TCOLS).eq('status','Pendente')),
   um(sb.from('transferencias').select(TCOLS).order('solicitado_em',{ascending:false}).limit(10)),
   todos('ferramentas','id,nome,codigo_patrimonial,obra_id,situacao'),
@@ -99,7 +102,7 @@ async function carregar(){
   todos('materiais','id,descricao,estoque_minimo',q=>q.gt('estoque_minimo',0).eq('ativo',true)),
   todos('pedido_itens','id,pedido_id',q=>q.eq('unidade_divergente',true)),
   um(sb.from('ferramenta_movs').select('id,ferramenta_id,tipo,em,obra_id').in('tipo',['Retirada','Devolução']).order('em',{ascending:false}).limit(10)),
-  um(sb.from('recebimentos_pedido').select('id,solicitacao_id,obra_id,criado_em,usuario_nome,estornado_em').order('criado_em',{ascending:false}).limit(10)),
+  REC()?um(sb.from('recebimentos_pedido').select('id,solicitacao_id,obra_id,criado_em,usuario_nome,estornado_em').order('criado_em',{ascending:false}).limit(10)):Promise.resolve(VAZIO),
   um(sb.from('materiais').select('id',{count:'exact',head:true}))]);
  let ped=[];
  if(pi.data&&pi.data.length){const ids=[...new Set(pi.data.map(x=>x.pedido_id))];
@@ -113,7 +116,7 @@ function calc(){
  const d=D,ok=r=>r&&r.data?r.data:[],f=x=>!OBRA||x.obra_id===OBRA;
  const obras=ok(d.ob),obraNome=id=>{const o=obras.find(x=>x.id===id);return o?o.nome:'—'};
  const sp=ok(d.sp).filter(f),sr=ok(d.sr).filter(f),spM=new Map(sp.map(x=>[x.id,x])),srM=new Map(sr.map(x=>[x.id,x]));
- const aberta=x=>{const r=srM.get(x.id);return x.situacao!=='Cancelada'&&!(r&&r.situacao==='Recebido totalmente')};
+ const aberta=x=>{const r=srM.get(x.id);return x.situacao!=='Cancelada'&&!(REC()&&r&&r.situacao==='Recebido totalmente')};
  const abertas=sp.filter(aberta),venc=abertas.filter(x=>x.situacao==='Prazo vencido'),aut=abertas.filter(x=>x.situacao==='Aguardando autorização');
  const areceber=sr.filter(x=>x.situacao==='Aguardando recebimento'||x.situacao==='Recebimento parcial'),parc=sr.filter(x=>x.situacao==='Recebimento parcial'),dv=sr.filter(x=>x.situacao==='Com divergência');
  const tf=ok(d.tp).filter(x=>!OBRA||x.obra_origem_id===OBRA||x.obra_destino_id===OBRA);
@@ -147,7 +150,7 @@ function desenhar(){
  const sOk=d.sp.data&&d.sr.data;
  const ks=[
   kpi({k:'abertas',v:'solicitacoes'},'Solicitações em andamento','clip',sOk?NF(c.abertas.length):'—',sOk?(c.venc.length?NF(c.venc.length)+' com prazo vencido':'Nenhuma com prazo vencido'):'Indisponível',sOk&&c.venc.length>0,'solicitacoes_prazo',sOk),
-  kpi({k:'areceber',v:'solicitacoes'},'Aguardando recebimento','truck',d.sr.data?NF(c.areceber.length):'—',d.sr.data?NF(c.parc.length)+' com recebimento parcial':'Indisponível',false,'solicitacoes_recebimento',!!d.sr.data),
+  REC()?kpi({k:'areceber',v:'solicitacoes'},'Aguardando recebimento','truck',d.sr.data?NF(c.areceber.length):'—',d.sr.data?NF(c.parc.length)+' com recebimento parcial':'Indisponível',false,'solicitacoes_recebimento',!!d.sr.data):'',
   kpi({k:'transf',v:'ferramentas'},'Transferências pendentes','swap',d.tp.data?NF(c.tf.length):'—',d.tp.data?'Aguardando confirmação na obra de destino':'Indisponível',false,'transferencias (ferramentas)',!!d.tp.data),
   kpi({k:'ferr',v:'ferramentas'},'Ferramentas disponíveis','wrench',d.fe.data?NF(c.cnt('Disponível')):'—',d.fe.data?NF(c.cnt('Em uso'))+' em uso · '+NF(c.cnt('Em manutenção'))+' em manutenção':'Indisponível',false,'ferramentas',!!d.fe.data),
   kpi({k:'minimo',v:'materiais'},'Materiais abaixo do mínimo','alert',d.es.data&&d.ma.data?NF(c.abaixo.length):'—',d.es.data&&d.ma.data?'de '+NF(c.comSaldo.length)+' com saldo registrado':'Indisponível',d.es.data&&c.abaixo.length>0,'estoque_material e materiais',!!(d.es.data&&d.ma.data))].join('');
@@ -156,30 +159,30 @@ function desenhar(){
   '<div class="pn-leg">'+L.map(x=>'<button type="button" data-fl="'+tp+'|'+esc(x.n)+'"'+(x.q?'':' disabled')+'><span class="pn-sw '+x.c+'"></span>'+esc(x.n)+' <b>'+NF(x.q)+'</b></button>').join('')+'</div>'};
  const al=[];
  if(c.venc.length)al.push({t:'Solicitações com prazo vencido',s:'Mais de 5 dias úteis desde a autorização',n:c.venc.length,ic:'clock',red:1,k:'a_venc'});
- if(c.dv.length)al.push({t:'Recebimentos com divergência',s:'Excedente, avaria ou falta a resolver',n:c.dv.length,ic:'alert',red:1,k:'a_div'});
+ if(REC()&&c.dv.length)al.push({t:'Recebimentos com divergência',s:'Excedente, avaria ou falta a resolver',n:c.dv.length,ic:'alert',red:1,k:'a_div'});
  if(c.tf.length)al.push({t:'Transferências a confirmar',s:'Aguardando confirmação na obra de destino',n:c.tf.length,ic:'swap',k:'a_tf'});
- if(c.ud.length)al.push({t:'Unidades divergentes',s:'O administrador precisa regularizar antes do recebimento',n:c.ud.length,ic:'layers',k:'a_ud'});
+ if(c.ud.length)al.push({t:'Unidades divergentes',s:REC()?'O administrador precisa regularizar antes do recebimento':'O administrador precisa regularizar',n:c.ud.length,ic:'layers',k:'a_ud'});
  if(c.abaixo.length)al.push({t:'Materiais abaixo do estoque mínimo',s:'Conforme o mínimo cadastrado em Materiais',n:c.abaixo.length,ic:'pack',red:1,k:'a_min'});
  const alDest={a_venc:'solicitacoes',a_div:'solicitacoes',a_tf:'ferramentas',a_ud:'solicitacoes',a_min:'materiais'};
  const alH=al.length?al.map(a=>{const t=temNav(alDest[a.k])?'button':'div';return '<'+t+(t==='button'?' type="button" data-al="'+a.k+'"':'')+' class="pn-al"><span class="pn-ic'+(a.red?' red':'')+'">'+svg(IC[a.ic])+'</span><span class="pn-at"><b>'+a.t+'</b><small>'+a.s+'</small></span><span class="pn-n'+(a.red?' red':'')+'">'+NF(a.n)+'</span>'+(t==='button'?CHEV:'')+'</'+t+'>'}).join(''):'<p class="pn-ok">Nenhuma pendência no momento.</p>';
- const obH=c.obrasEsc.length?c.obrasEsc.map(x=>'<tr><td>'+esc(x.o.nome)+'<small>'+esc(x.o.status)+'</small></td><td class="r"><span class="pn-ob"><i><u style="width:'+Math.round(x.ab/c.maxAb*100)+'%"></u></i><b>'+NF(x.ab)+'</b></span></td><td class="r">'+(x.vc?'<span class="pn-badge">'+NF(x.vc)+'</span>':'<b style="color:var(--mute)">0</b>')+'</td><td class="r"><b>'+NF(x.ar)+'</b></td><td class="r"><b>'+NF(x.eu)+'</b></td><td class="r"><b>'+NF(x.fu)+'</b></td></tr>').join(''):'<tr><td colspan="6" class="empty">Nenhuma obra cadastrada ou liberada para você.</td></tr>';
+ const obH=c.obrasEsc.length?c.obrasEsc.map(x=>'<tr><td>'+esc(x.o.nome)+'<small>'+esc(x.o.status)+'</small></td><td class="r"><span class="pn-ob"><i><u style="width:'+Math.round(x.ab/c.maxAb*100)+'%"></u></i><b>'+NF(x.ab)+'</b></span></td><td class="r">'+(x.vc?'<span class="pn-badge">'+NF(x.vc)+'</span>':'<b style="color:var(--mute)">0</b>')+'</td>'+(REC()?'<td class="r"><b>'+NF(x.ar)+'</b></td>':'')+'<td class="r"><b>'+NF(x.eu)+'</b></td><td class="r"><b>'+NF(x.fu)+'</b></td></tr>').join(''):'<tr><td colspan="'+(REC()?6:5)+'" class="empty">Nenhuma obra cadastrada ou liberada para você.</td></tr>';
  const mvH=c.mv.length?c.mv.map(m=>'<div class="pn-mv"><span class="pn-ic">'+svg(IC[m.ic],16)+'</span><span class="pn-mt"><b>'+esc(m.ti)+'</b><small>'+esc(m.me)+'</small></span></div>').join(''):'<p class="pn-ok">Ainda não há movimentações registradas.</p>';
  const nob=c.obras.length,cad=[['obras','Obras',nob],['funcionarios','Funcionários',d.fu.data?d.fu.data.length:null],['ferramentas','Ferramentas',d.fe.data?d.fe.data.length:null],['materiais','Materiais',d.cm.count==null?null:d.cm.count]].filter(x=>temNav(x[0]));
  const vazio=!nob||!(d.fu.data&&d.fu.data.length);
  const sel=nob>1?'<label>Obra<select id="pn_obra" aria-label="Filtrar o Painel por obra"><option value="">Todas as obras</option>'+c.obras.map(o=>'<option value="'+o.id+'"'+(o.id===OBRA?' selected':'')+'>'+esc(o.nome)+'</option>').join('')+'</select></label>':'';
  v.innerHTML='<div class="pn"><section class="pn-hero"><div class="pn-top"><div><p class="pn-kick">Painel de gestão</p><h1>Painel</h1><p>Bem-vindo(a), '+esc(me.nome||me.login||'')+' · '+esc(me.perfil_real||me.perfil)+' · '+(OBRA?esc((c.obras.find(o=>o.id===OBRA)||{}).nome||''):(nob===1?esc(c.obras[0].nome):'todas as obras a que você tem acesso'))+'</p></div>'+
   '<div class="pn-tools">'+sel+'<button type="button" id="pn_atu">Atualizar</button></div></div>'+
-  '<div class="pn-stat"><span class="pn-live'+(rt==='SUBSCRIBED'?' on':'')+'" id="pn_rt">'+(rt==='SUBSCRIBED'?'Recebimentos em tempo real: ativo':'Recebimentos em tempo real: indisponível')+'</span><span id="pn_hr">Atualizado às '+d.em.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+'</span></div></section>'+
+  '<div class="pn-stat">'+(REC()?'<span class="pn-live'+(rt==='SUBSCRIBED'?' on':'')+'" id="pn_rt">'+(rt==='SUBSCRIBED'?'Recebimentos em tempo real: ativo':'Recebimentos em tempo real: indisponível')+'</span>':'')+'<span id="pn_hr">Atualizado às '+d.em.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+'</span></div></section>'+
   (erros?'<div>'+erros+'</div>':'')+
   '<section class="pn-kpis" aria-label="Indicadores">'+ks+'</section>'+
-  '<div class="pn-row"><section class="pn-card pn-big" aria-label="Prazo e recebimento"><div class="pn-ch"><h2>Prazo e recebimento das solicitações</h2><span>Dois status independentes</span></div>'+
-  '<div class="pn-lb">Status do prazo (5 dias úteis)</div>'+bar(c.prazo,'p')+'<div class="pn-lb" style="margin-top:22px">Status do recebimento</div>'+bar(c.receb,'r')+
-  '<div class="pn-fonte">Fonte: solicitacoes_prazo e solicitacoes_recebimento. Não inclui solicitações canceladas. Receber o material não apaga um atraso.</div></section>'+
+  '<div class="pn-row"><section class="pn-card pn-big" aria-label="'+(REC()?'Prazo e recebimento':'Prazo')+'"><div class="pn-ch"><h2>'+(REC()?'Prazo e recebimento das solicitações':'Prazo das solicitações')+'</h2><span>'+(REC()?'Dois status independentes':'Status do prazo')+'</span></div>'+
+  '<div class="pn-lb">Status do prazo (5 dias úteis)</div>'+bar(c.prazo,'p')+(REC()?'<div class="pn-lb" style="margin-top:22px">Status do recebimento</div>'+bar(c.receb,'r'):'')+
+  '<div class="pn-fonte">'+(REC()?'Fonte: solicitacoes_prazo e solicitacoes_recebimento. Não inclui solicitações canceladas. Receber o material não apaga um atraso.':'Fonte: solicitacoes_prazo. Não inclui solicitações canceladas.')+'</div></section>'+
   '<section class="pn-card pn-side" aria-label="Atenção agora"><div class="pn-ch"><h2>Atenção agora</h2><span>por importância</span></div>'+alH+'</section></div>'+
-  '<div class="pn-row"><section class="pn-card pn-big" aria-label="Situação das obras"><div class="pn-ch"><h2>Situação das obras</h2><span>Cada usuário vê só as obras a que tem acesso</span></div><div class="pn-tb wrap"><table><thead><tr><th>Obra</th><th class="r">Solicitações em andamento</th><th class="r">Prazo vencido</th><th class="r">A receber</th><th class="r">Ferramentas em uso</th><th class="r">Funcionários ativos</th></tr></thead><tbody>'+obH+'</tbody></table></div>'+
-  '<div class="pn-fonte">Fonte: obras, solicitacoes_prazo, solicitacoes_recebimento, ferramentas, funcionarios.</div></section>'+
-  '<section class="pn-card pn-side" aria-label="Últimas movimentações"><div class="pn-ch"><h2>Últimas movimentações</h2><span>recebimentos, transferências e ferramentas</span></div>'+mvH+
-  '<div class="pn-fonte">Fonte: recebimentos_pedido, transferencias, ferramenta_movs (o que o seu perfil pode ler).</div></section></div>'+
+  '<div class="pn-row"><section class="pn-card pn-big" aria-label="Situação das obras"><div class="pn-ch"><h2>Situação das obras</h2><span>Cada usuário vê só as obras a que tem acesso</span></div><div class="pn-tb wrap"><table><thead><tr><th>Obra</th><th class="r">Solicitações em andamento</th><th class="r">Prazo vencido</th>'+(REC()?'<th class="r">A receber</th>':'')+'<th class="r">Ferramentas em uso</th><th class="r">Funcionários ativos</th></tr></thead><tbody>'+obH+'</tbody></table></div>'+
+  '<div class="pn-fonte">Fonte: obras, solicitacoes_prazo, '+(REC()?'solicitacoes_recebimento, ':'')+'ferramentas, funcionarios.</div></section>'+
+  '<section class="pn-card pn-side" aria-label="Últimas movimentações"><div class="pn-ch"><h2>Últimas movimentações</h2><span>'+(REC()?'recebimentos, transferências e ferramentas':'transferências e ferramentas')+'</span></div>'+mvH+
+  '<div class="pn-fonte">Fonte: '+(REC()?'recebimentos_pedido, ':'')+'transferencias, ferramenta_movs (o que o seu perfil pode ler).</div></section></div>'+
   (cad.length?'<section class="pn-card" aria-label="Cadastros"><div class="pn-ch"><h2>Cadastros</h2><span>abrir a lista</span></div><div class="pn-cad">'+cad.map(x=>'<button type="button" data-cd="'+x[0]+'">'+x[1]+' <b>'+(x[2]==null?'—':NF(x[2]))+'</b></button>').join('')+'</div></section>':'')+
   '<section class="pn-card pn"><details'+(vazio?' open':'')+'><summary>Por onde começar</summary><ol class="steps"><li>Cadastre as <button class="link" data-g="obras">obras</button> (somente o administrador).</li><li>Cadastre as <button class="link" data-g="disciplinas">disciplinas</button> e as <button class="link" data-g="categorias">categorias</button>.</li><li>Cadastre os <button class="link" data-g="funcionarios">funcionários</button>.</li><li>Cadastre as <button class="link" data-g="ferramentas">ferramentas</button> e os <button class="link" data-g="materiais">materiais</button>.</li></ol></details></section></div>';
  /* ações: tudo o que aparece clicável faz algo */
@@ -196,7 +199,7 @@ function desenhar(){
 async function recarregar(manual){const my=++seq;
  try{const x=await carregar();if(my!==seq||cur!=='painel')return;x.uid=D&&D.uid;D=x;desenhar();if(manual)toast('Painel atualizado.')}
  catch(e){if(my===seq&&cur==='painel'&&!D)$q('#view').innerHTML='<h1>Painel</h1><div class="err">'+esc(msg(e)||String(e))+'</div>'}}
-function assinar(){if(canal||!sb||typeof sb.channel!=='function')return;
+function assinar(){if(canal||!REC()||!sb||typeof sb.channel!=='function')return;
  try{canal=sb.channel('pn-'+Math.random().toString(36).slice(2,8));
   ['recebimentos_pedido','recebimentos_pedido_itens','recebimento_divergencias'].forEach(t=>canal.on('postgres_changes',{event:'*',schema:'public',table:t},()=>{clearTimeout(tRt);tRt=setTimeout(()=>{if(cur==='painel'&&!document.hidden&&me)recarregar(false)},600)}));
   canal.subscribe(s=>{rt=s;const e=$q('#pn_rt');if(e){e.classList.toggle('on',s==='SUBSCRIBED');e.textContent='Recebimentos em tempo real: '+(s==='SUBSCRIBED'?'ativo':'indisponível')}})}catch(e){canal=null}}

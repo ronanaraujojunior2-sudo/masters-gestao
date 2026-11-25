@@ -188,7 +188,7 @@ async function executar(){
   R.secoes.push({t:'Rejeitados',l:J.map(a=>envia(a).motivo).concat(rejRpc.map(x=>x.motivo))});
   if(!sc){const ids=[...new Set(imp.map(a=>{const s=F.ctx.sol.get(PC().nk(String(a.payload.requisicao)));return s&&s.id}).filter(Boolean))];
    const at=await atendimento(ids);if(at.length)R.secoes.push({t:'Atendimento das solicitações atualizado',l:at});
-   R.nota='O percentual de atendimento é de COMPRA, não de recebimento. O estoque não foi alterado: ele só muda quando o almoxarife confirma o recebimento em “Receber materiais”.'}
+   R.nota=(window.__recAtivo&&window.__recAtivo()===false)?'O percentual de atendimento é de COMPRA. O controle de recebimento e de entrada de materiais é feito no Sienge.':'O percentual de atendimento é de COMPRA, não de recebimento. O estoque não foi alterado: ele só muda quando o almoxarife confirma o recebimento em “Receber materiais”.'}
   else R.nota='Materiais novos aparecem em “Materiais”, marcados para conferência. Nenhum estoque foi criado.';
   ULT=R;toast('Importação concluída.');voltarLista()
  }catch(e){E1.textContent=msg(e)||String(e);E1.classList.remove('hide');b.disabled=false}}

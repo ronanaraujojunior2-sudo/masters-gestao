@@ -3,9 +3,12 @@
       data do pedido de compra. Os insumos aparecem só como observação de consulta, no botão "+" de cada linha.
       O detalhamento das compras e dos materiais é feito no Sienge.
    2) Módulo Materiais inativo: sai do menu e o banco bloqueia novos cadastros e movimentações de materiais.
-   Tudo é controlado por duas chaves (tabela config_sistema, SQL 23) que SÓ o administrador MASTERS muda, na tela
-   Administração > Módulos e escopo. Nada é apagado: voltar ao modo completo / reativar Materiais é só mudar a chave.
-   Sem o SQL 23 instalado, este arquivo não muda nada (o sistema continua como era).
+   3) Recebimento de materiais DESATIVADO em Solicitações e pedidos (o Sienge é o sistema oficial dessa etapa): sem o botão
+      "Registrar recebimento", sem status, pendências, parciais ou totais no Painel e nas consultas, e o banco recusa novos
+      registros de recebimento. Os recebimentos já gravados continuam guardados e voltam a aparecer se a chave for reativada.
+   Tudo é controlado por três chaves (tabela config_sistema, SQL 23 e 24) que SÓ o administrador MASTERS muda, na tela
+   Administração > Módulos e escopo. Nada é apagado: voltar ao modo completo / reativar Materiais / reativar o recebimento é só mudar a chave.
+   Sem o SQL 23/24 instalado, este arquivo não muda nada (o sistema continua como era).
    Carregue este arquivo ANTES de modulo-shell.js. Não altera nenhum outro módulo. */
 try{(function(){
 const Q=s=>document.querySelector(s);
@@ -18,19 +21,23 @@ const podeNova=()=>gravaCompras()||!!(me&&me.assistente);
 const MAT_NAV=['materiais','receber','estoque'];
 
 /* ---------------- chaves ---------------- */
-let CFG=null;                                       /* {mat:boolean, simples:boolean, info:{}} */
-const PADRAO=()=>({mat:true,simples:false,info:{},lido:false});
+let CFG=null;                                       /* {mat:boolean, simples:boolean, rec:boolean, info:{}} */
+const PADRAO=()=>({mat:true,simples:false,rec:true,info:{},lido:false});
 async function lerCfg(){
  try{const{data,error}=await sb.from('config_sistema').select('chave,valor,motivo,atualizado_em');
   if(error)throw error;
   const m={};(data||[]).forEach(r=>m[r.chave]=r);
-  CFG={mat:!m.modulo_materiais||m.modulo_materiais.valor!=='inativo',simples:!!m.solicitacoes_modo&&m.solicitacoes_modo.valor==='simples',info:m,lido:true};
-  try{sessionStorage.setItem('sx_cfg',JSON.stringify({mat:CFG.mat,simples:CFG.simples}))}catch(x){}}
+  CFG={mat:!m.modulo_materiais||m.modulo_materiais.valor!=='inativo',simples:!!m.solicitacoes_modo&&m.solicitacoes_modo.valor==='simples',rec:!m.recebimento_compras||m.recebimento_compras.valor!=='inativo',info:m,lido:true};
+  try{sessionStorage.setItem('sx_cfg',JSON.stringify({mat:CFG.mat,simples:CFG.simples,rec:CFG.rec}))}catch(x){}}
  catch(e){CFG=PADRAO();window.__cfgErro=e;try{sessionStorage.removeItem('sx_cfg')}catch(x){}}                /* tabela ainda não existe: comportamento antigo */
  return CFG}
 /* último valor lido, só para o menu já nascer certo no próximo acesso (a leitura do banco sempre confirma depois) */
-const guardado=()=>{try{const x=JSON.parse(sessionStorage.getItem('sx_cfg')||'null');return x&&typeof x.mat==='boolean'?{mat:x.mat,simples:!!x.simples,info:{},lido:false}:null}catch(e){return null}};
+const guardado=()=>{try{const x=JSON.parse(sessionStorage.getItem('sx_cfg')||'null');return x&&typeof x.mat==='boolean'?{mat:x.mat,simples:!!x.simples,rec:x.rec!==false,info:{},lido:false}:null}catch(e){return null}};
 const cfg=()=>CFG||guardado()||PADRAO();
+/* recebimento de materiais em Solicitações e pedidos: ligado só quando a chave está ativa e o modo simples não está em uso.
+   Os outros módulos (Painel, prazo, registro de recebimento, textos) perguntam a esta função na hora de desenhar. */
+const recAtivo=()=>{const c=cfg();return c.rec!==false&&!c.simples};
+window.__recAtivo=recAtivo;
 
 /* ---------------- menu ---------------- */
 function ajustaMenu(){
@@ -43,7 +50,9 @@ function ajustaMenu(){
   const n=m.querySelector('[data-v="cfg_modulos"]');n.onclick=telaCfg;n.classList.toggle('on',cur==='cfg_modulos')}}
 const _menuE=menu;
 menu=function(){const r=_menuE.apply(this,arguments);ajustaMenu();
- if(!CFG)lerCfg().then(()=>{if(CFG.lido){menu();mark()}limpaPainel()});
+ if(!CFG){const antes=recAtivo();
+  lerCfg().then(()=>{if(CFG.lido){menu();mark()}limpaPainel();
+   if(cur==='painel'&&recAtivo()!==antes&&typeof painel==='function')painel()})}      /* a chave só chegou agora: o Painel se redesenha sem recebimento */
  return r};
 
 /* quem ainda tentar abrir Materiais por outro caminho (atalho do painel, por exemplo) recebe o aviso */
@@ -225,18 +234,21 @@ async function telaCfg(){
    CFG.mat?'Inativar módulo Materiais':'Reativar módulo Materiais','modulo_materiais',CFG.mat?'inativo':'ativo',I.modulo_materiais)+
   cartao('Solicitações e pedidos',!CFG.simples,CFG.simples?'Modo simples':'Modo completo',
    CFG.simples?'Mostra só o número da solicitação, a data da solicitação, a data da aprovação e a data do pedido de compra, com os insumos em um botão + de consulta.':'Modo completo anterior: itens, quantidades, atendimento, prazo, recebimento e unidades.',
-   CFG.simples?'Voltar ao modo completo':'Usar o modo simples','solicitacoes_modo',CFG.simples?'completo':'simples',I.solicitacoes_modo);
+   CFG.simples?'Voltar ao modo completo':'Usar o modo simples','solicitacoes_modo',CFG.simples?'completo':'simples',I.solicitacoes_modo)+
+  cartao('Recebimento de materiais (Solicitações e pedidos)',CFG.rec,CFG.rec?'Ativo':'Desativado',
+   CFG.rec?'Solicitações e pedidos mostram o recebimento: botão Registrar recebimento, status, pendências e divergências, no Painel e nas consultas.':'O recebimento de materiais não aparece mais em Solicitações e pedidos nem no Painel, e o banco recusa novos registros de recebimento. O controle de recebimento e de entrada é feito no Sienge. Os recebimentos já gravados continuam guardados e voltam a aparecer se esta chave for reativada. Não afeta ferramentas, transferências, malas e malões.',
+   CFG.rec?'Desativar o recebimento de materiais':'Reativar o recebimento de materiais','recebimento_compras',CFG.rec?'inativo':'ativo',I.recebimento_compras);
  v.querySelectorAll('[data-cfg]').forEach(b=>b.onclick=()=>trocar(b.dataset.cfg.split('|')))}
 
 function trocar([chave,valor]){
- const nome=chave==='modulo_materiais'?'Módulo Materiais':'Solicitações e pedidos',acao=valor==='ativo'?'reativar':valor==='inativo'?'inativar':valor==='simples'?'usar o modo simples em':'voltar ao modo completo em';
+ const nome=chave==='modulo_materiais'?'Módulo Materiais':chave==='recebimento_compras'?'Recebimento de materiais em Solicitações e pedidos':'Solicitações e pedidos',acao=valor==='ativo'?'reativar':valor==='inativo'?'inativar':valor==='simples'?'usar o modo simples em':'voltar ao modo completo em';
  modal('Confirmar mudança','<p>Você vai <b>'+acao+'</b> «'+nome+'». Nenhum dado é apagado e dá para desfazer depois.</p>'+
   '<label class="fl" for="x_m">Motivo <b class="rq">*</b></label><textarea id="x_m" rows="3" maxlength="300"></textarea><div class="hint">Fica registrado na auditoria.</div>','Confirmar',async()=>{
   const m=Q('#x_m').value.trim();if(m.length<5)return 'Informe o motivo (mínimo 5 letras).';
   const{error}=await sb.rpc('config_definir',{p_chave:chave,p_valor:valor,p_motivo:m});if(error)return msg(error);
   await lerCfg();MEMO=new Map();toast('Configuração gravada.');menu();mark();telaCfg()})}
 
-window.__escopo={get cfg(){return cfg()},lerCfg,telaSimples,telaCfg};
+window.__escopo={get cfg(){return cfg()},lerCfg,telaSimples,telaCfg,recAtivo};
 }())}catch(e){window.__escopoErro=e;console.error('Escopo simplificado não carregou:',e);
  const av=()=>{const t=document.getElementById('toast');if(t){t.textContent='Escopo simplificado não carregou: '+e.message;t.classList.add('on')}};
  if(document.readyState==='complete')av();else window.addEventListener('load',av)}
